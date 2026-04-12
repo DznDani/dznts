@@ -1,18 +1,18 @@
 import EventEmitter from "node:events"
 import path from "node:path"
-import bplist from "bplist-parser"
 import {
 	BrowserWindow,
 	type IpcMainEvent,
+	type IpcMainInvokeEvent,
 	Menu,
 	type NativeImage,
 	Notification,
 	Tray,
 	app,
-	dialog,
 	globalShortcut,
 	ipcMain,
 	nativeImage,
+	screen,
 	shell,
 } from "electron"
 import serve from "electron-serve"
@@ -28,6 +28,13 @@ import menubarTwo from "../logos/menu-two.png"
 import menubar from "../logos/menu.png"
 
 const loadURL = serve({ directory: "client" })
+
+type OpenURLResult =
+	| { ok: true }
+	| {
+			ok: false
+			error: string
+	  }
 
 export class NTSApplication {
 	window: BrowserWindow
@@ -48,13 +55,12 @@ export class NTSApplication {
 		this.tray.on("click", () => this.toggle())
 		this.tray.on("right-click", () => this.openMenu())
 
-		// @ts-expect-error: only supported on macOS
-		this.tray.on("drop-text", (_evt: IpcMainEvent, url: string) => this.openURL(url))
-
-		// @ts-expect-error: only supported on macOS
-		this.tray.on("drop-files", (_evt: IpcMainEvent, files: string[]) =>
-			this.openFile(files[0]),
-		)
+		if (process.platform === "darwin") {
+			// @ts-expect-error: only supported on macOS
+			this.tray.on("drop-text", (_evt: IpcMainEvent, url: string) => {
+				void this.openURL(url)
+			})
+		}
 
 		this.evts.on("error", (message: string) => this.showNotification(message))
 
@@ -73,19 +79,31 @@ export class NTSApplication {
 		ipcMain.on("preferences", (_evt: IpcMainEvent, prefs: preferences.Preferences) =>
 			this.storePreferences(prefs),
 		)
+		ipcMain.handle("open-show-url", async (_evt: IpcMainInvokeEvent, url: string) => {
+			const result = await this.openURL(url, { notify: false })
+			if (!result.ok) {
+				throw new Error(result.error)
+			}
+			return true
+		})
 
-		// @ts-expect-error: only supported on macOS
-		app.on("open-file", (_evt: IpcMainEvent, filename: string) =>
-			this.openFile(filename),
-		)
+		if (process.platform === "darwin") {
+			app.on("activate", () => this.open())
+			setTimeout(() => app.dock.hide(), 1500)
+		}
+
 		app.on("will-quit", () => globalShortcut.unregisterAll())
-		app.on("activate", () => this.open())
 
 		globalShortcut.register("Control+N", () => this.toggle())
-
-		setTimeout(() => app.dock.hide(), 1500)
 		await this.liveTracks.init()
 		await this.loadClient()
+	}
+
+	showFromSecondInstance() {
+		if (this.window.isMinimized()) {
+			this.window.restore()
+		}
+		this.open()
 	}
 
 	login() {
@@ -138,15 +156,8 @@ export class NTSApplication {
 
 	open() {
 		this.window.webContents.send("open")
-
-		const trayPos = this.tray.getBounds()
-		const windowPos = this.window.getBounds()
-
-		const yScale = process.platform === "darwin" ? 1 : 10
-		const x = Math.round(trayPos.x + trayPos.width / 2 - windowPos.width / 2)
-		const y = Math.round(trayPos.y + trayPos.height * yScale)
-
-		this.window.setPosition(x, y + 8, false)
+		const { x, y } = getPopupPosition(this.window, this.tray)
+		this.window.setPosition(x, y, false)
 		this.window.show()
 		this.window.focus()
 		this.liveTracks.subscribe()
@@ -181,41 +192,33 @@ export class NTSApplication {
 		this.tray.popUpContextMenu(menu)
 	}
 
-	async openFile(filename: string) {
-		if (!filename.endsWith(".webloc")) {
-			this.evts.emit("error", "NTS Desktop can only open .webloc files")
-			return
+	async openURL(url: string, options: { notify?: boolean } = {}): Promise<OpenURLResult> {
+		const cleanURL = url.trim()
+		if (!cleanURL.startsWith("https://www.nts.live/shows/")) {
+			const message = "Please use a valid NTS show URL"
+			if (options.notify !== false) {
+				this.evts.emit("error", message)
+			}
+			return { ok: false, error: message }
 		}
 
-		const content = await bplist.parseFile(filename)
-		const url = content[0].URL
-		app.addRecentDocument(filename)
-		this.openURL(url)
+		try {
+			const data = await show(cleanURL)
+			history.add({ name: data.name, url: cleanURL })
+			this.window.webContents.send("open-show", data)
+			return { ok: true }
+		} catch (_err) {
+			const message = "Could not open this NTS show URL"
+			if (options.notify !== false) {
+				this.evts.emit("error", message)
+			}
+			return { ok: false, error: message }
+		}
 	}
 
-	async openURL(url: string) {
-		if (!url.startsWith("https://www.nts.live/shows/")) {
-			this.evts.emit("error", "Please use a valid NTS show URL")
-			return
-		}
-
-		const data = await show(url)
-		history.add({ name: data.name, url })
-		this.window.webContents.send("open-show", data)
-	}
-
-	async browse() {
-		const { filePaths, canceled } = await dialog.showOpenDialog({
-			message: "Select a link to an archive show",
-			properties: ["openFile"],
-			filters: [{ name: "links", extensions: ["webloc"] }],
-		})
-
-		if (canceled) {
-			return
-		}
-
-		this.openFile(filePaths[0])
+	promptArchiveShowURL() {
+		this.open()
+		this.window.webContents.send("open-archive-url")
 	}
 
 	showNotification(message: string) {
@@ -288,7 +291,9 @@ function makeWindow(): BrowserWindow {
 	})
 
 	window.setAlwaysOnTop(true, "floating")
-	window.setVisibleOnAllWorkspaces(true)
+	if (process.platform !== "win32") {
+		window.setVisibleOnAllWorkspaces(true)
+	}
 	window.fullScreenable = false
 
 	return window
@@ -311,7 +316,9 @@ function makeIcon(filename: string): NativeImage {
 function makeTray(): Tray {
 	const icon = makeIcon(menubar)
 	const tray = new Tray(icon)
-	tray.setIgnoreDoubleClickEvents(true)
+	if (process.platform === "darwin") {
+		tray.setIgnoreDoubleClickEvents(true)
+	}
 	return tray
 }
 
@@ -341,8 +348,8 @@ async function makeMenu(application: NTSApplication): Promise<Menu> {
 		},
 		{ type: "separator" },
 		{
-			label: "Load Archive Show...",
-			click: () => application.browse(),
+			label: "Load Archive Show URL...",
+			click: () => application.promptArchiveShowURL(),
 		},
 		{
 			label: "Recently Listened Archive Shows",
@@ -378,4 +385,60 @@ async function makeMenu(application: NTSApplication): Promise<Menu> {
 		},
 		{ label: "Quit NTS Desktop", role: "quit" },
 	])
+}
+
+function getPopupPosition(window: BrowserWindow, tray: Tray): { x: number; y: number } {
+	const trayBounds = tray.getBounds()
+	const windowBounds = window.getBounds()
+	const margin = 8
+
+	if (trayBounds.width === 0 || trayBounds.height === 0) {
+		const cursor = screen.getCursorScreenPoint()
+		const display = screen.getDisplayNearestPoint(cursor)
+		const { workArea } = display
+		return {
+			x: workArea.x + Math.round((workArea.width - windowBounds.width) / 2),
+			y: workArea.y + Math.round((workArea.height - windowBounds.height) / 2),
+		}
+	}
+
+	const anchor = {
+		x: trayBounds.x + Math.round(trayBounds.width / 2),
+		y: trayBounds.y + Math.round(trayBounds.height / 2),
+	}
+
+	const display = screen.getDisplayNearestPoint(anchor)
+	const { bounds, workArea } = display
+
+	let x = anchor.x - Math.round(windowBounds.width / 2)
+	let y = workArea.y + workArea.height - windowBounds.height - margin
+
+	const taskbarOnLeft = workArea.x > bounds.x
+	const taskbarOnTop = workArea.y > bounds.y
+	const taskbarOnRight =
+		workArea.width < bounds.width && workArea.x === bounds.x
+
+	if (taskbarOnLeft) {
+		x = workArea.x + margin
+		y = anchor.y - Math.round(windowBounds.height / 2)
+	} else if (taskbarOnTop) {
+		y = workArea.y + margin
+	} else if (taskbarOnRight) {
+		x = workArea.x + workArea.width - windowBounds.width - margin
+		y = anchor.y - Math.round(windowBounds.height / 2)
+	}
+
+	const minX = workArea.x + margin
+	const maxX = workArea.x + workArea.width - windowBounds.width - margin
+	const minY = workArea.y + margin
+	const maxY = workArea.y + workArea.height - windowBounds.height - margin
+
+	return {
+		x: clamp(x, minX, Math.max(minX, maxX)),
+		y: clamp(y, minY, Math.max(minY, maxY)),
+	}
+}
+
+function clamp(value: number, min: number, max: number): number {
+	return Math.max(min, Math.min(max, value))
 }

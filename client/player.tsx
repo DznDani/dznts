@@ -15,28 +15,56 @@ export function Player(props: Props) {
 
 	useEffect(
 		function () {
-			ref.current?.addEventListener("play", onPlay)
-			ref.current?.addEventListener("pause", onStop)
-			ref.current?.addEventListener("stop", onStop)
+			const audio = ref.current
+			if (!audio) {
+				return
+			}
+
+			function handlePlay() {
+				onPlay()
+			}
+
+			function handlePause() {
+				onStop()
+			}
+
+			function handleEnded() {
+				onStop()
+			}
+
+			audio.addEventListener("play", handlePlay)
+			audio.addEventListener("pause", handlePause)
+			audio.addEventListener("ended", handleEnded)
+
+			return () => {
+				audio.removeEventListener("play", handlePlay)
+				audio.removeEventListener("pause", handlePause)
+				audio.removeEventListener("ended", handleEnded)
+			}
 		},
 		[onPlay, onStop],
 	)
 
 	useEffect(
 		function () {
-			if (!ref.current) {
+			const audio = ref.current
+			if (!audio) {
 				return
 			}
 
 			if (!playing) {
-				ref.current?.pause()
+				if (!audio.paused) {
+					audio.pause()
+				}
 				return
 			}
 
-			ref.current.load()
-			ref.current?.play()
+			void audio.play().catch((err: unknown) => {
+				console.warn("Could not start live stream playback", { src, err })
+				onStop()
+			})
 		},
-		[playing],
+		[playing, onStop, src],
 	)
 
 	useEffect(

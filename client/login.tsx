@@ -29,7 +29,8 @@ export function Login(props: LoginProps) {
 				await electron.invoke("login-credentials", { email, password })
 				onClose()
 			} catch (err) {
-				notify({ message: "invalid credentials", ttl: 4000, type: "error" })
+				const message = err instanceof Error ? err.message : "invalid credentials"
+				notify({ message, ttl: 4000, type: "error" })
 			}
 		},
 		[onClose],

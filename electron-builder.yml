@@ -5,17 +5,16 @@ directories:
   app: dist
   output: bundle
 
-mac:
-  icon: app/icon.icns
-  category: public.app-category.music
+win:
+  icon: app/icon.ico
   target:
-    - target: dir
+    - target: nsis
       arch:
-        - universal
-    - target: dmg
-      arch:
-        - universal
+        - x64
 
-fileAssociations:
-  ext: webloc
-  role: Viewer
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true

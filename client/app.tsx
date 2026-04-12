@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { Fragment, useCallback, useEffect, useState } from "react"
 
 import "./global.css"
 
@@ -21,7 +21,7 @@ import { Chat } from "./chat"
 import { Help } from "./help"
 import { Login } from "./login"
 import { Mixcloud } from "./mixcloud"
-import { Notifications } from "./notifications"
+import { Notifications, notify } from "./notifications"
 import { Offline } from "./offline"
 import { Player } from "./player"
 import { Show } from "./show"
@@ -54,11 +54,11 @@ export function App() {
 	}, [])
 
 	return (
-		<>
+		<Fragment>
 			<NTS />
 			<Login onClose={handleLoginClose} show={route === "login"} />
 			<Notifications />
-		</>
+		</Fragment>
 	)
 }
 
@@ -230,8 +230,34 @@ export function NTS() {
 		setPosition(Math.round(pos))
 	}, [])
 
+	const handleOpenArchiveURL = useCallback(async function () {
+		const url = window.prompt(
+			"Paste an NTS archive show URL (https://www.nts.live/shows/...)",
+		)
+
+		if (!url) {
+			return
+		}
+
+		try {
+			await electron.invoke("open-show-url", url)
+		} catch (err) {
+			const message =
+				err instanceof Error ? err.message : "Could not open this NTS show URL"
+			notify({ message, type: "error" })
+		}
+	}, [])
+
+	useEvent(
+		"open-archive-url",
+		() => {
+			void handleOpenArchiveURL()
+		},
+		[handleOpenArchiveURL],
+	)
+
 	return (
-		<>
+		<Fragment>
 			<Splash hide={!live.loading} />
 			<Slider index={index} animate={isOpen}>
 				<Slide>
@@ -263,6 +289,7 @@ export function NTS() {
 						playing={playing === "show"}
 						duration={duration}
 						position={position}
+						onOpenArchiveURL={handleOpenArchiveURL}
 					/>
 				</Slide>
 			</Slider>
@@ -322,7 +349,7 @@ export function NTS() {
 			<Offline hide={!isOffline} />
 			<Help hide={!isShowingHelp} onHide={() => setIsShowingHelp(false)} />
 			<Volume volume={preferences.volume} />
-		</>
+		</Fragment>
 	)
 }
 

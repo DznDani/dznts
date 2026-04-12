@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Typecheck
-        run: make typecheck
+        run: pnpm run typecheck
 
   formatting:
     name: Formatting
@@ -51,7 +51,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Formatting
-        run: make formatting
+        run: pnpm run format:check
 
   lint:
     name: Lint
@@ -74,7 +74,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Lint
-        run: make lint
+        run: pnpm run lint
 
   build:
     name: Build
@@ -102,9 +102,11 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Set version
         if: startsWith(github.ref, 'refs/tags/')
-        run: pnpm version --no-git-tag-version --new-version "${GITHUB_REF:11}"
+        run: pnpm run version:from-tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
       - name: Build renderer
-        run: make build packages
+        run: pnpm run build
         env:
           NODE_OPTIONS: --openssl-legacy-provider
       - name: Upload dist
@@ -113,9 +115,9 @@ jobs:
           name: dist
           path: dist
 
-  bundle:
-    name: Bundle
-    runs-on: macos-latest
+  bundle-windows:
+    name: Bundle Windows
+    runs-on: windows-latest
     needs:
       - build
     steps:
@@ -137,19 +139,22 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Set version
         if: startsWith(github.ref, 'refs/tags/')
-        run: pnpm version --no-git-tag-version --new-version "${GITHUB_REF:11}"
+        run: pnpm run version:from-tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
       - name: Download dist
         uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
       - name: Build Electron app
-        run: make app
+        run: pnpm run bundle:win
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
-          name: bundle
-          path: bundle
+          name: bundle-windows
+          path: bundle/*.exe
+          if-no-files-found: error
 
   release:
     name: Release
@@ -157,8 +162,8 @@ jobs:
       - typecheck
       - formatting
       - lint
-      - bundle
-    runs-on: macos-latest
+      - bundle-windows
+    runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Check out
@@ -166,12 +171,12 @@ jobs:
       - name: Download app
         uses: actions/download-artifact@v4
         with:
-          name: bundle
+          name: bundle-windows
           path: bundle
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: bundle/NTS Desktop-*.dmg
+          files: bundle/*.exe
           generate_release_notes: true
           fail_on_unmatched_files: true
         env:

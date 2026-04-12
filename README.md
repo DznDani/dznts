@@ -8,7 +8,7 @@ An unofficial desktop app for NTS built in Electron.
 
 ## Usage
 
-- Click the NTS logo in the menubar to open the player.
+- Click the NTS tray icon to open the player.
 - Use the left and right buttons on the player to navigate between channels. You
   can also use the arrow keys.
 - Click the play/stop button on the live streams to play them. Spacebar works
@@ -16,13 +16,15 @@ An unofficial desktop app for NTS built in Electron.
 - On the live streams click the tracklist button in to top right corner to open
   the live tracklist in the browser. (This will only work if you are an [NTS
   Supporter](https://www.nts.live/supporters)).
-- Drop the link from the browser to an archive show on the menubar icon to play
-  it, `.webloc` files work too.
+- Use "Load Archive Show URL..." from the tray menu, or click "Open Archive Show
+  URL" in the app, then paste an archive URL like
+  `https://www.nts.live/shows/...`.
 - On the archive screen, you can scroll down to reveal the controls and
   tracklist.
 - Click on a tracklist item to copy the information.
-- Press `⌘Q` when the window is open.
-- You can refresh the app with `⌘R`
+- Press `Alt+F4` to close the player window.
+- Use the tray menu entries "Reload NTS Desktop" and "Quit NTS Desktop" for
+  app-level actions.
 - `ctrl + N` will open NTS Desktop
 - Pressing `T` when the window is open will open the tracklist
 - Pressing `C` when the window is open will open the chat window for that
@@ -38,22 +40,14 @@ An unofficial desktop app for NTS built in Electron.
 ## Installation
 
 Go to the [Releases Page](https://github.com/romeovs/nts-desktop/releases) and
-fetch the `.dmg` file from the latest release.
+download the latest Windows installer (`.exe`).
 
-Open the disk image and drag the `NTS Desktop` app to `Applications` and open
-it.
+Run the installer and follow the setup wizard.
 
-The first time you open the app, it will show an erro because the app isn't
-signed. I do not have a Mac Developer license.
+This build is currently unsigned, so Windows SmartScreen may warn on first run.
+Choose "More info" and then "Run anyway" if needed.
 
-To open the app anyway, you can:
-
-```
-System Preferences > Security & Privacy > General > Open Anyway
-```
-
-I have only tested this app on macOS, so I can't guarantee it works on Linux or
-Windows. If people want to help me port it over, shoot me a message, PR's are welcome!
+This release line currently targets Windows x64.
 
 ## Local Development
 

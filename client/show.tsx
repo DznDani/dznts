@@ -4,6 +4,7 @@ import type { ShowInfo } from "~/app/show"
 
 import { Controls, formatDuration } from "./controls"
 import { electron } from "./electron"
+import { notify } from "./notifications"
 import { Tracklist } from "./tracklist/index"
 
 import css from "./show.module.css"
@@ -16,10 +17,20 @@ type Props = {
 	playing: boolean
 	duration: number
 	position: number
+	onOpenArchiveURL: () => Promise<void>
 }
 
 export function Show(props: Props) {
-	const { show, onPlay, onStop, onSeek, playing, duration, position } = props
+	const {
+		show,
+		onPlay,
+		onStop,
+		onSeek,
+		playing,
+		duration,
+		position,
+		onOpenArchiveURL,
+	} = props
 
 	const handleMyNTSClick = useCallback(function () {
 		electron.send("my-nts")
@@ -28,6 +39,14 @@ export function Show(props: Props) {
 		electron.send("explore")
 	}, [])
 
+	const handleOpenArchiveClick = useCallback(async function () {
+		try {
+			await onOpenArchiveURL()
+		} catch (_err) {
+			notify({ message: "Could not open archive URL prompt", type: "error" })
+		}
+	}, [onOpenArchiveURL])
+
 	if (!show) {
 		return (
 			<div className={css.empty}>
@@ -35,8 +54,11 @@ export function Show(props: Props) {
 					<svg viewBox="0 0 24 24">
 						<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
 					</svg>
-					<p>Drop a link on the menu icon to load an episode</p>
+					<p>Enter an archive show URL to load an episode</p>
 					<div className={css.nav}>
+						<button type="button" onClick={handleOpenArchiveClick}>
+							Open Archive Show URL
+						</button>
 						<button type="button" onClick={handleMyNTSClick}>
 							My NTS
 						</button>

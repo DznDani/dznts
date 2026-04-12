@@ -22,8 +22,9 @@ export function Help(props: Props) {
 				The spacebar also works.
 			</p>
 			<p>
-				To play a show from the archive, drag the link from your browser to the
-				menubar icon. A webloc file will work too.
+				To play a show from the archive, choose "Load Archive Show URL..." from the
+				tray menu or click "Open Archive Show URL" in the app, then paste an NTS
+				show URL.
 			</p>
 			<p>
 				On the archive show screen, you can scroll down to reveal the controls and

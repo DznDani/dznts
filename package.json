@@ -4,6 +4,20 @@
 	"description": "A desktop app for playing NTS Live and streams",
 	"type": "module",
 	"main": "index.cjs",
+	"scripts": {
+		"dev": "make dev",
+		"typecheck": "tsc --noEmit",
+		"format": "biome check . --linter-enabled=false --organize-imports-enabled=true --fix",
+		"format:check": "biome check . --linter-enabled=false --organize-imports-enabled=true",
+		"lint": "biome lint .",
+		"build:main": "node scripts/build-main.mjs",
+		"build:preload": "node scripts/copy-preload.mjs",
+		"build:renderer": "vite build",
+		"build:packages": "node scripts/prepare-dist-package.mjs && node scripts/install-dist-deps.mjs",
+		"build": "node scripts/build-main.mjs && node scripts/copy-preload.mjs && vite build && node scripts/prepare-dist-package.mjs && node scripts/install-dist-deps.mjs",
+		"bundle:win": "electron-builder build --win nsis --x64 --publish=never",
+		"version:from-tag": "node scripts/set-version-from-tag.mjs"
+	},
 	"author": "Romeo Van Snick <romeo@romeovansnick.be>",
 	"license": "MIT",
 	"repository": "https://github.com/romeovs/nts-desktop",
@@ -30,7 +44,6 @@
 		"vite-tsconfig-paths": "^5.0.1"
 	},
 	"dependencies": {
-		"bplist-parser": "^0.3.2",
 		"classnames": "^2.5.1",
 		"electron-log": "^4.4.8",
 		"electron-serve": "^1.3.0",
