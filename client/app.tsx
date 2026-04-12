@@ -15,6 +15,7 @@ import { useOffline } from "./lib/use-offline"
 import { useMetadata } from "./metadata"
 
 import type { ShowInfo } from "../app/show"
+import { ArchiveURLPrompt } from "./archive-url-prompt"
 import { Arrow } from "./arrow"
 import { Channel as ChannelCard } from "./channel"
 import { Chat } from "./chat"
@@ -70,6 +71,7 @@ export function NTS() {
 	const [playing, setPlaying] = useState<Channel | null>(null)
 	const [isOpen, setIsOpen] = useState(document.hasFocus())
 	const [isShowingHelp, setIsShowingHelp] = useState(false)
+	const [isArchiveURLPromptOpen, setIsArchiveURLPromptOpen] = useState(false)
 	const [duration, setDuration] = useState(0)
 	const [position, setPosition] = useState(0)
 	const [looped, setLooped] = useState(0)
@@ -125,9 +127,17 @@ export function NTS() {
 		[position],
 	)
 
-	const close = useCallback(function () {
-		electron.send("close")
-	}, [])
+	const close = useCallback(
+		function () {
+			if (isArchiveURLPromptOpen) {
+				setIsArchiveURLPromptOpen(false)
+				return
+			}
+
+			electron.send("close")
+		},
+		[isArchiveURLPromptOpen],
+	)
 
 	useEffect(
 		function () {
@@ -180,6 +190,7 @@ export function NTS() {
 		"close",
 		function () {
 			setIsOpen(false)
+			setIsArchiveURLPromptOpen(false)
 
 			if (!playing) {
 				return
@@ -231,16 +242,13 @@ export function NTS() {
 	}, [])
 
 	const handleOpenArchiveURL = useCallback(async function () {
-		const url = window.prompt(
-			"Paste an NTS archive show URL (https://www.nts.live/shows/...)",
-		)
+		setIsArchiveURLPromptOpen(true)
+	}, [])
 
-		if (!url) {
-			return
-		}
-
+	const handleArchiveURLSubmit = useCallback(async function (url: string) {
 		try {
 			await electron.invoke("open-show-url", url)
+			setIsArchiveURLPromptOpen(false)
 		} catch (err) {
 			const message =
 				err instanceof Error ? err.message : "Could not open this NTS show URL"
@@ -348,6 +356,11 @@ export function NTS() {
 			)}
 			<Offline hide={!isOffline} />
 			<Help hide={!isShowingHelp} onHide={() => setIsShowingHelp(false)} />
+			<ArchiveURLPrompt
+				show={isArchiveURLPromptOpen}
+				onClose={() => setIsArchiveURLPromptOpen(false)}
+				onSubmit={handleArchiveURLSubmit}
+			/>
 			<Volume volume={preferences.volume} />
 		</Fragment>
 	)
