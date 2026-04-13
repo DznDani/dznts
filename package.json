@@ -18,7 +18,7 @@
 		"bundle:win": "electron-builder build --win nsis --x64 --publish=never",
 		"version:from-tag": "node scripts/set-version-from-tag.mjs"
 	},
-	"author": "Romeo Van Snick <romeo@romeovansnick.be>",
+	"author": "DznDani <controltab3+dzNTS@gmail.com>",
 	"license": "MIT",
 	"repository": "https://github.com/dzndani/dznts",
 	"devDependencies": {
