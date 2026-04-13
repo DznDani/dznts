@@ -1,16 +1,26 @@
 .wrapper {
 	overflow-y: auto;
+	overflow-x: hidden;
+	width: 100%;
 	height: 100vh;
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+
+.wrapper::-webkit-scrollbar {
+	width: 0;
+	height: 0;
 }
 .channel {
 	position: relative;
+	width: 100%;
 	height: 100vh;
 	overflow: hidden;
 }
 
 .image {
 	object-fit: cover;
-	width: 100vw;
+	width: 100%;
 	height: 100vh;
 }
 

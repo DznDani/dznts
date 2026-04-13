@@ -9,7 +9,8 @@
 	transition: background 200ms;
 	cursor: pointer;
 	display: flex;
-	justify-content: space-between;
+	justify-content: flex-start;
+	gap: 0.5rem;
 	align-items: start;
 
 	&.active {
@@ -27,7 +28,8 @@
 }
 
 .info {
-	width: 100%;
+	flex: 1;
+	min-width: 0;
 }
 
 .artist {
