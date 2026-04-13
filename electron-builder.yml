@@ -1,5 +1,5 @@
-productName: NTS Desktop
-appId: "be.romeovansnick.nts"
+productName: dzNTS
+appId: "com.dzndani.dznts"
 
 directories:
   app: dist

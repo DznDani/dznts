@@ -7,7 +7,7 @@ import type { Stream } from "~/lib/stream"
 const artwork = [
 	{
 		type: "image/png",
-		src: "https://raw.githubusercontent.com/romeovs/nts-desktop/refs/heads/main/logos/logo.png",
+		src: "https://raw.githubusercontent.com/dzndani/dznts/refs/heads/main/logos/logo.png",
 	},
 ]
 
@@ -19,47 +19,47 @@ export function useMetadata(
 	useEffect(
 		function () {
 			if (!playing) {
-				document.title = "NTS"
+				document.title = "dzNTS"
 				navigator.mediaSession.metadata = null
 				return
 			}
 
 			if (playing === 1) {
 				if (live.data) {
-					const title = `NTS 1 - ${live.data?.channel1.now.name}`
+					const title = `dzNTS - NTS 1 - ${live.data?.channel1.now.name}`
 					document.title = title
 					navigator.mediaSession.metadata = new MediaMetadata({
 						title,
 						artwork,
 					})
 				} else {
-					document.title = "NTS 1"
+					document.title = "dzNTS - NTS 1"
 					navigator.mediaSession.metadata = null
 				}
 			}
 			if (playing === 2) {
 				if (live.data) {
-					const title = `NTS 2 - ${live.data?.channel2.now.name}`
+					const title = `dzNTS - NTS 2 - ${live.data?.channel2.now.name}`
 					document.title = title
 					navigator.mediaSession.metadata = new MediaMetadata({
 						title,
 						artwork,
 					})
 				} else {
-					document.title = "NTS 2"
+					document.title = "dzNTS - NTS 2"
 					navigator.mediaSession.metadata = null
 				}
 			}
 			if (playing === "show") {
 				if (show) {
-					const title = `NTS - ${show.name}`
-					document.title
+					const title = `dzNTS - ${show.name}`
+					document.title = title
 					navigator.mediaSession.metadata = new MediaMetadata({
 						title,
 						artwork,
 					})
 				} else {
-					document.title = "NTS"
+					document.title = "dzNTS"
 					navigator.mediaSession.metadata = null
 				}
 			}

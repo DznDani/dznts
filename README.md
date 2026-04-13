@@ -21,9 +21,9 @@ An unofficial desktop app for NTS built in Electron and ported to Windows.
   tracklist.
 - Click on a tracklist item to copy the information.
 - Press `Alt+F4` to close the player window.
-- Use the tray menu entries "Reload NTS Desktop" and "Quit NTS Desktop" for
+- Use the tray menu entries "Reload dzNTS" and "Quit dzNTS" for
   app-level actions.
-- `ctrl + N` will open NTS Desktop
+- `ctrl + N` will open dzNTS
 - Pressing `T` when the window is open will open the tracklist
 - Pressing `C` when the window is open will open the chat window for that
   channel

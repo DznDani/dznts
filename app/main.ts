@@ -6,7 +6,7 @@ let application: NTSApplication | null = null
 
 async function main() {
 	const production = __dirname.endsWith(".asar")
-	console.log(`Starting NTS Desktop... (production=${production})`)
+	console.log(`Starting dzNTS... (production=${production})`)
 
 	await app.whenReady()
 
@@ -22,7 +22,7 @@ if (!app.requestSingleInstanceLock()) {
 	})
 
 	void main().catch((error) => {
-		console.error("Failed to start NTS Desktop", error)
+		console.error("Failed to start dzNTS", error)
 		app.quit()
 	})
 }

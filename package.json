@@ -1,7 +1,7 @@
 {
-	"name": "nts-desktop",
+	"name": "dznts",
 	"version": "0.0.15",
-	"description": "A desktop app for playing NTS Live and streams",
+	"description": "dzNTS desktop app for playing NTS Live and streams",
 	"type": "module",
 	"main": "index.cjs",
 	"scripts": {
@@ -20,7 +20,7 @@
 	},
 	"author": "Romeo Van Snick <romeo@romeovansnick.be>",
 	"license": "MIT",
-	"repository": "https://github.com/romeovs/nts-desktop",
+	"repository": "https://github.com/dzndani/dznts",
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
 		"@types/classnames": "^2.3.4",

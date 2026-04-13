@@ -12,7 +12,7 @@ title = $(shell pwd | xargs basename)
 log = printf "$(__blue)$(title): $(__normal) %s\\n"
 
 help: ## Show this help.
-	@echo 'NTS Desktop'
+	@echo 'dzNTS'
 	@echo 'Please use one of these make rules:'
 	@echo
 	@grep '##' $(MAKEFILE_LIST) | grep -v 'grep' | awk -F ': ##' '{ printf("%18s  %s\n", $$1, $$2) }'

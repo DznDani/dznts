@@ -230,7 +230,7 @@ export class NTSApplication {
 	}
 
 	openAbout() {
-		shell.openExternal("https://github.com/romeovs/nts-desktop")
+		shell.openExternal("https://github.com/dzndani/dznts")
 	}
 
 	openTracklist(channel: number | string) {
@@ -328,11 +328,11 @@ async function makeMenu(application: NTSApplication): Promise<Menu> {
 
 	return Menu.buildFromTemplate([
 		{
-			label: "About NTS Desktop",
+			label: "About dzNTS",
 			click: () => application.openAbout(),
 		},
 		{
-			label: "Show NTS Desktop",
+			label: "Show dzNTS",
 			accelerator: "Control+N",
 			acceleratorWorksWhenHidden: true,
 			click: () => application.open(),
@@ -380,10 +380,10 @@ async function makeMenu(application: NTSApplication): Promise<Menu> {
 				},
 		{ type: "separator" },
 		{
-			label: "Reload NTS Desktop",
+			label: "Reload dzNTS",
 			click: () => application.reload(),
 		},
-		{ label: "Quit NTS Desktop", role: "quit" },
+		{ label: "Quit dzNTS", role: "quit" },
 	])
 }
 
