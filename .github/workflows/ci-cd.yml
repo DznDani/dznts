@@ -6,6 +6,7 @@ on:
       - main
     tags:
       - v*.*.*
+      - pre*-*.*.*
 jobs:
   typecheck:
     name: Typecheck
@@ -176,7 +177,9 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
+          name: ${{ github.ref_name }}
           files: bundle/*.exe
+          prerelease: ${{ startsWith(github.ref_name, 'pre') }}
           generate_release_notes: true
           fail_on_unmatched_files: true
         env:
