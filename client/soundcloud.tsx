@@ -76,12 +76,24 @@ export function Soundcloud(props: Props) {
 				widget.current = w
 			})
 
+			function safeUnbind(eventName: unknown) {
+				try {
+					w.unbind(eventName)
+				} catch (err) {
+					console.warn("Could not unbind SoundCloud widget event", err)
+				}
+			}
+
 			return function () {
-				w.unbind(Events.PLAY)
-				w.unbind(Events.PAUSE)
-				w.unbind(Events.FINISH)
-				w.unbind(Events.PLAY_PROGRESS)
-				w.unbind(Events.READY)
+				if (widget.current === w) {
+					widget.current = null
+				}
+
+				safeUnbind(Events.PLAY)
+				safeUnbind(Events.PAUSE)
+				safeUnbind(Events.FINISH)
+				safeUnbind(Events.PLAY_PROGRESS)
+				safeUnbind(Events.READY)
 			}
 		},
 		[show, onStop, onLoad, onPlay, onProgress],
@@ -145,7 +157,7 @@ export function Soundcloud(props: Props) {
 		<iframe
 			ref={ref}
 			src={`https://w.soundcloud.com/player/?url=${feed}`}
-			allow="autoplay"
+			allow="autoplay; encrypted-media"
 			className={css.frame}
 		/>
 	)

@@ -113,16 +113,39 @@ export function useLiveInfo(options: Options): InfoState {
 
 	const load = useCallback(async function () {
 		abort.current?.abort()
-		abort.current = new AbortController()
+		const controller = new AbortController()
+		abort.current = controller
 
-		setState((state) => ({ ...state, loading: true, error: null }))
+		setState((state) => ({
+			...state,
+			// Only show the full-screen splash during the initial bootstrap.
+			loading: state.data === null,
+			error: null,
+		}))
 
-		const data = await live({ signal: abort.current.signal })
-		if (abort.current.signal.aborted) {
-			throw new Error("aborted")
+		try {
+			const data = await live({ signal: controller.signal })
+			if (controller.signal.aborted) {
+				return
+			}
+
+			setState({ loading: false, data, error: null })
+		} catch (err) {
+			if (controller.signal.aborted) {
+				return
+			}
+
+			const error =
+				err instanceof Error
+					? err
+					: new Error("Could not load live channel data")
+
+			setState((state) => ({
+				loading: false,
+				data: state.data,
+				error,
+			}))
 		}
-
-		setState({ loading: false, data, error: null })
 	}, [])
 
 	useEffect(
