@@ -12,6 +12,7 @@ import {
 	globalShortcut,
 	ipcMain,
 	nativeImage,
+	nativeTheme,
 	screen,
 	shell,
 } from "electron"
@@ -23,9 +24,12 @@ import { NTSLiveTracks } from "./live-tracks"
 import * as preferences from "./preferences"
 import { show } from "./show"
 
-import menubarOne from "../logos/menu-one.png"
-import menubarTwo from "../logos/menu-two.png"
-import menubar from "../logos/menu.png"
+import trayDarkCh1 from "../logos/dznts-tray-dark-ch1.ico"
+import trayDarkCh2 from "../logos/dznts-tray-dark-ch2.ico"
+import trayDarkIdle from "../logos/dznts-tray-dark-idle.ico"
+import trayLightCh1 from "../logos/dznts-tray-light-ch1.ico"
+import trayLightCh2 from "../logos/dznts-tray-light-ch2.ico"
+import trayLightIdle from "../logos/dznts-tray-light-idle.ico"
 
 const loadURL = serve({ directory: "client" })
 
@@ -36,16 +40,40 @@ type OpenURLResult =
 			error: string
 	  }
 
+type TrayTheme = "light" | "dark"
+type TrayState = "idle" | 1 | 2
+
+type TrayIconSet = {
+	idle: string
+	one: string
+	two: string
+}
+
+const trayIcons: Record<TrayTheme, TrayIconSet> = {
+	light: {
+		idle: trayLightIdle,
+		one: trayLightCh1,
+		two: trayLightCh2,
+	},
+	dark: {
+		idle: trayDarkIdle,
+		one: trayDarkCh1,
+		two: trayDarkCh2,
+	},
+}
+
 export class NTSApplication {
 	window: BrowserWindow
 	tray: Tray
 	evts: EventEmitter
 	production: boolean
 	liveTracks: NTSLiveTracks
+	trayState: TrayState
 
 	constructor(production: boolean) {
 		this.window = makeWindow()
-		this.tray = makeTray()
+		this.trayState = "idle"
+		this.tray = makeTray(getTrayIconPath(this.trayState))
 		this.evts = new EventEmitter()
 		this.production = production
 		this.liveTracks = new NTSLiveTracks(this.window.webContents)
@@ -54,6 +82,7 @@ export class NTSApplication {
 	async init() {
 		this.tray.on("click", () => this.toggle())
 		this.tray.on("right-click", () => this.openMenu())
+		nativeTheme.on("updated", () => this.updateTrayIcon())
 
 		if (process.platform === "darwin") {
 			// @ts-expect-error: only supported on macOS
@@ -145,12 +174,17 @@ export class NTSApplication {
 	}
 
 	setIcon(channel: 1 | 2) {
-		const icon = makeIcon(channel === 1 ? menubarOne : menubarTwo)
-		this.tray.setImage(icon)
+		this.trayState = channel
+		this.updateTrayIcon()
 	}
 
 	clearIcon() {
-		const icon = makeIcon(menubar)
+		this.trayState = "idle"
+		this.updateTrayIcon()
+	}
+
+	updateTrayIcon() {
+		const icon = makeIcon(getTrayIconPath(this.trayState))
 		this.tray.setImage(icon)
 	}
 
@@ -302,24 +336,45 @@ function makeWindow(): BrowserWindow {
 function makeIcon(filename: string): NativeImage {
 	const filepath = path.resolve(__dirname, filename)
 	const original = nativeImage.createFromPath(filepath)
+	if (process.platform === "win32") {
+		return original
+	}
+
 	const size = original.getSize()
-	const ratio = size.width / size.height
+	const ratio = size.height > 0 ? size.width / size.height : 1
 	const height = 18
 	const icon = original.resize({
 		height,
 		width: Math.round(height * ratio * 10) / 10,
 	})
-	icon.setTemplateImage(true)
+	if (process.platform === "darwin") {
+		icon.setTemplateImage(true)
+	}
 	return icon
 }
 
-function makeTray(): Tray {
-	const icon = makeIcon(menubar)
+function makeTray(iconPath: string): Tray {
+	const icon = makeIcon(iconPath)
 	const tray = new Tray(icon)
 	if (process.platform === "darwin") {
 		tray.setIgnoreDoubleClickEvents(true)
 	}
 	return tray
+}
+
+function getTrayTheme(): TrayTheme {
+	return nativeTheme.shouldUseDarkColors ? "dark" : "light"
+}
+
+function getTrayIconPath(state: TrayState): string {
+	const icons = trayIcons[getTrayTheme()]
+	if (state === 1) {
+		return icons.one
+	}
+	if (state === 2) {
+		return icons.two
+	}
+	return icons.idle
 }
 
 async function makeMenu(application: NTSApplication): Promise<Menu> {

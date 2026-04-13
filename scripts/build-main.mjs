@@ -32,6 +32,7 @@ async function main() {
 		packages: "external",
 		external: ["electron"],
 		loader: {
+			".ico": "file",
 			".png": "file",
 		},
 		entryPoints: ["app/main.ts"],
