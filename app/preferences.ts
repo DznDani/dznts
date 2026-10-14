@@ -4,10 +4,12 @@ import { app } from "electron"
 
 export type Preferences = {
 	volume: number
+	autoplay: boolean
 }
 
-const defaults = {
+const defaults: Preferences = {
 	volume: 0.8,
+	autoplay: true,
 }
 
 const filename = path.join(app.getPath("userData"), "preferences.json")
@@ -15,7 +17,7 @@ const filename = path.join(app.getPath("userData"), "preferences.json")
 export async function read(): Promise<Preferences> {
 	try {
 		const content = await fs.readFile(filename, "utf-8")
-		return JSON.parse(content)
+		return { ...defaults, ...JSON.parse(content) }
 	} catch (err) {
 		return defaults
 	}

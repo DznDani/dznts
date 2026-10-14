@@ -8,6 +8,7 @@ type Props = {
 	playing: boolean
 	onStop: () => void
 	onPlay: () => void
+	onEnded: () => void
 	onProgress: (pos: number) => void
 	onLoad: (dur: number) => void
 	position: number
@@ -29,6 +30,7 @@ export function Soundcloud(props: Props) {
 		playing,
 		onStop,
 		onPlay,
+		onEnded,
 		onProgress,
 		onLoad,
 		position,
@@ -56,7 +58,7 @@ export function Soundcloud(props: Props) {
 			const w = SC.Widget(ref.current)
 			w.bind(Events.PLAY, onPlay)
 			w.bind(Events.PAUSE, onStop)
-			w.bind(Events.FINISH, onStop)
+			w.bind(Events.FINISH, onEnded)
 			w.bind(Events.PLAY_PROGRESS, function (evt: { currentPosition: number }) {
 				const position = evt.currentPosition / 1000
 				const rounded = Math.round(position)
@@ -96,7 +98,7 @@ export function Soundcloud(props: Props) {
 				safeUnbind(Events.READY)
 			}
 		},
-		[show, onStop, onLoad, onPlay, onProgress],
+		[show, onStop, onEnded, onLoad, onPlay, onProgress],
 	)
 
 	useEffect(

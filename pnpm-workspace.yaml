@@ -1,0 +1,7 @@
+allowBuilds:
+  '@biomejs/biome': true
+  '@firebase/util': true
+  '@parcel/watcher': true
+  electron: true
+  esbuild: true
+  protobufjs: true

@@ -21,6 +21,7 @@ export type ShowInfo = {
 		url: string
 		source: SourceType
 	}
+	path?: string | null
 }
 
 type Content = {

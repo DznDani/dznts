@@ -20,9 +20,13 @@ import serve from "electron-serve"
 
 import * as credentials from "./credentials"
 import * as history from "./history"
+import * as lastfm from "./lastfm"
+import { NTSLastFmScrobbler } from "./lastfm-scrobbler"
+import * as lastfmSession from "./lastfm-session"
 import { NTSLiveTracks } from "./live-tracks"
 import * as preferences from "./preferences"
-import { show } from "./show"
+import { type ShowInfo, type Track, show } from "./show"
+import { UpNextQueue, type UpNextEpisode, episodePathFromURL } from "./up-next"
 
 import trayDarkCh1 from "../logos/dznts-tray-dark-ch1.ico"
 import trayDarkCh2 from "../logos/dznts-tray-dark-ch2.ico"
@@ -69,6 +73,9 @@ export class NTSApplication {
 	production: boolean
 	liveTracks: NTSLiveTracks
 	trayState: TrayState
+	scrobbler: NTSLastFmScrobbler
+	lastfmToken: string | null = null
+	upNext: UpNextQueue = new UpNextQueue()
 
 	constructor(production: boolean) {
 		this.window = makeWindow()
@@ -77,6 +84,7 @@ export class NTSApplication {
 		this.evts = new EventEmitter()
 		this.production = production
 		this.liveTracks = new NTSLiveTracks(this.window.webContents)
+		this.scrobbler = new NTSLastFmScrobbler()
 	}
 
 	async init() {
@@ -115,6 +123,27 @@ export class NTSApplication {
 			}
 			return true
 		})
+		ipcMain.on("show-ended", (_evt: IpcMainEvent, episodePath: string | null) => {
+			void this.handleShowEnded(episodePath)
+		})
+
+		// Last.fm IPC handlers
+		ipcMain.on(
+			"lastfm-scrobbler-update",
+			(
+				_evt: IpcMainEvent,
+				data: { position: number; tracklist: Track[]; showName: string },
+			) => {
+				this.scrobbler.setShow(data.showName, data.tracklist)
+				void this.scrobbler.update(data.position)
+			},
+		)
+		ipcMain.on("lastfm-scrobbler-position", (_evt: IpcMainEvent, position: number) => {
+			void this.scrobbler.update(position)
+		})
+		ipcMain.on("lastfm-scrobbler-stop", () => {
+			this.scrobbler.reset()
+		})
 
 		if (process.platform === "darwin") {
 			app.on("activate", () => this.open())
@@ -125,6 +154,7 @@ export class NTSApplication {
 
 		globalShortcut.register("Control+N", () => this.toggle())
 		await this.liveTracks.init()
+		await this.scrobbler.init()
 		await this.loadClient()
 	}
 
@@ -226,7 +256,10 @@ export class NTSApplication {
 		this.tray.popUpContextMenu(menu)
 	}
 
-	async openURL(url: string, options: { notify?: boolean } = {}): Promise<OpenURLResult> {
+	async openURL(
+		url: string,
+		options: { notify?: boolean; fromQueue?: boolean } = {},
+	): Promise<OpenURLResult> {
 		const cleanURL = url.trim()
 		if (!cleanURL.startsWith("https://www.nts.live/shows/")) {
 			const message = "Please use a valid NTS show URL"
@@ -238,8 +271,10 @@ export class NTSApplication {
 
 		try {
 			const data = await show(cleanURL)
+			const path = episodePathFromURL(cleanURL)
 			history.add({ name: data.name, url: cleanURL })
-			this.window.webContents.send("open-show", data)
+			this.upNext.setCurrent(path, Boolean(options.fromQueue))
+			this.window.webContents.send("open-show", { ...data, path })
 			return { ok: true }
 		} catch (_err) {
 			const message = "Could not open this NTS show URL"
@@ -248,6 +283,58 @@ export class NTSApplication {
 			}
 			return { ok: false, error: message }
 		}
+	}
+
+	// --- Up Next ---
+
+	async handleShowEnded(episodePath: string | null) {
+		// Ignore late events coming from a previous show's widget
+		if (!episodePath || episodePath !== this.upNext.current) {
+			return
+		}
+		const prefs = await preferences.read()
+		if (!prefs.autoplay) {
+			return
+		}
+		await this.playNext({ auto: true })
+	}
+
+	async playNext(options: { auto: boolean }) {
+		const episode = await this.upNext.next()
+		await this.playEpisode(episode, options.auto)
+	}
+
+	async playUpNext(path: string) {
+		await this.playEpisode(this.upNext.take(path), false)
+	}
+
+	async playEpisode(episode: UpNextEpisode | null, notify: boolean) {
+		if (!episode) {
+			return
+		}
+		this.upNext.played.add(episode.path)
+		const result = await this.openURL(episode.url, {
+			notify: false,
+			fromQueue: true,
+		})
+		if (!result.ok) {
+			// Skip episodes that can't be loaded instead of stopping the chain
+			if (notify) {
+				await this.playNext({ auto: true })
+			}
+			return
+		}
+		if (notify) {
+			const details = [episode.name, episode.location].filter(Boolean).join(" — ")
+			this.showNotification(`Up next: ${details}`)
+		}
+	}
+
+	async toggleAutoplay(autoplay: boolean) {
+		await this.storePreferences({ autoplay })
+		// Keep the renderer in sync, it sends the full preferences object on
+		// every volume change and would otherwise overwrite this value
+		await this.syncPreferences()
 	}
 
 	promptArchiveShowURL() {
@@ -301,6 +388,51 @@ export class NTSApplication {
 			...old,
 			...prefs,
 		})
+	}
+
+	// --- Last.fm ---
+
+	async lastfmConnect() {
+		try {
+			const token = await lastfm.getToken()
+			this.lastfmToken = token
+			const authUrl = lastfm.getAuthUrl(token)
+			shell.openExternal(authUrl)
+			this.showNotification(
+				"Authorize dzNTS in your browser, then right-click the tray and select 'Complete Last.fm Connection'",
+			)
+		} catch (err) {
+			console.warn("Last.fm connect failed:", err)
+			this.showNotification("Could not connect to Last.fm")
+		}
+	}
+
+	async lastfmConfirm() {
+		if (!this.lastfmToken) {
+			this.showNotification(
+				"No pending Last.fm connection. Please click 'Connect Last.fm...' first.",
+			)
+			return
+		}
+
+		try {
+			const session = await lastfm.getSession(this.lastfmToken)
+			await lastfmSession.write(session)
+			this.scrobbler.setSession(session.sessionKey)
+			this.lastfmToken = null
+			this.showNotification(`Last.fm connected as ${session.username}`)
+		} catch (err) {
+			console.warn("Last.fm confirm failed:", err)
+			this.showNotification(
+				"Could not complete Last.fm connection. Make sure you authorized the app in your browser.",
+			)
+		}
+	}
+
+	async lastfmDisconnect() {
+		await lastfmSession.clear()
+		this.scrobbler.clearSession()
+		this.lastfmToken = null
 	}
 }
 
@@ -380,6 +512,63 @@ function getTrayIconPath(state: TrayState): string {
 async function makeMenu(application: NTSApplication): Promise<Menu> {
 	const h = await history.read()
 	const hasCredentials = await credentials.has()
+	const lfmSession = await lastfmSession.read()
+	const lfmConfigured = lastfm.isConfigured()
+	const hasPendingToken = Boolean(application.lastfmToken)
+	const prefs = await preferences.read()
+	const upcoming = application.upNext.peek(5)
+
+	const upNextItems: Electron.MenuItemConstructorOptions[] = [
+		{
+			label: "Autoplay Up Next",
+			type: "checkbox",
+			checked: prefs.autoplay,
+			click: (item) => void application.toggleAutoplay(item.checked),
+		},
+		{
+			label: "Play Next",
+			enabled: Boolean(application.upNext.current),
+			click: () => void application.playNext({ auto: false }),
+		},
+		{
+			label: "Up Next",
+			enabled: upcoming.length > 0,
+			submenu: upcoming.map((ep) => ({
+				label: [ep.name, ep.date].filter(Boolean).join(" — "),
+				click: () => void application.playUpNext(ep.path),
+			})),
+		},
+	]
+
+	const lastfmItems: Electron.MenuItemConstructorOptions[] = []
+	if (lfmConfigured) {
+		if (lfmSession) {
+			lastfmItems.push({
+				label: `Last.fm: Connected as ${lfmSession.username}`,
+				enabled: false,
+			})
+			lastfmItems.push({
+				label: "Disconnect Last.fm",
+				click: () => void application.lastfmDisconnect(),
+			})
+		} else if (hasPendingToken) {
+			lastfmItems.push({
+				label: "Complete Last.fm Connection",
+				click: () => void application.lastfmConfirm(),
+			})
+			lastfmItems.push({
+				label: "Cancel Last.fm Connection",
+				click: () => {
+					application.lastfmToken = null
+				},
+			})
+		} else {
+			lastfmItems.push({
+				label: "Connect Last.fm...",
+				click: () => void application.lastfmConnect(),
+			})
+		}
+	}
 
 	return Menu.buildFromTemplate([
 		{
@@ -424,6 +613,10 @@ async function makeMenu(application: NTSApplication): Promise<Menu> {
 			],
 		},
 		{ type: "separator" },
+		...upNextItems,
+		{ type: "separator" },
+		...lastfmItems,
+		...(lastfmItems.length > 0 ? [{ type: "separator" } as const] : []),
 		!hasCredentials
 			? {
 					label: "Log in to get live tracks...",

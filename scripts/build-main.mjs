@@ -3,26 +3,30 @@ import { spawnSync } from "node:child_process"
 
 import { build } from "esbuild"
 
-function readFirebaseConfig() {
-	if (process.env.FIREBASE_CONFIG) {
-		return process.env.FIREBASE_CONFIG
+import fs from "node:fs"
+
+function readEnvVar(name) {
+	if (process.env[name]) {
+		return process.env[name]
 	}
 
-	const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm"
-	const output = spawnSync(pnpmCmd, ["exec", "dotenv", "-p", "FIREBASE_CONFIG"], {
-		encoding: "utf-8",
-		stdio: ["ignore", "pipe", "ignore"],
-	})
-
-	if (output.status === 0) {
-		return output.stdout.trim()
+	try {
+		const envContent = fs.readFileSync(".env", "utf-8")
+		const match = envContent.match(new RegExp(`^${name}=(.*)$`, "m"))
+		if (match) {
+			return match[1].trim()
+		}
+	} catch (e) {
+		// Ignore if .env doesn't exist
 	}
 
 	return ""
 }
 
 async function main() {
-	const firebaseConfig = readFirebaseConfig()
+	const firebaseConfig = readEnvVar("FIREBASE_CONFIG")
+	const lastfmApiKey = readEnvVar("LASTFM_API_KEY")
+	const lastfmSharedSecret = readEnvVar("LASTFM_SHARED_SECRET")
 	await mkdir("dist", { recursive: true })
 
 	await build({
@@ -39,6 +43,8 @@ async function main() {
 		outfile: "dist/index.cjs",
 		define: {
 			FIREBASE_CONFIG: JSON.stringify(firebaseConfig),
+			LASTFM_API_KEY: JSON.stringify(lastfmApiKey),
+			LASTFM_SHARED_SECRET: JSON.stringify(lastfmSharedSecret),
 		},
 	})
 }
@@ -47,3 +53,4 @@ main().catch((error) => {
 	console.error(error)
 	process.exit(1)
 })
+

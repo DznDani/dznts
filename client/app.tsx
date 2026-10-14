@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from "react"
+import { Fragment, useCallback, useEffect, useRef, useState } from "react"
 
 import "./global.css"
 
@@ -212,6 +212,54 @@ export function NTS() {
 		[isOffline, stopAll],
 	)
 
+	// --- Last.fm scrobbler integration ---
+	const lastScrobbledShow = useRef<string | null>(null)
+
+	// Send tracklist to scrobbler when a new show starts playing
+	useEffect(
+		function () {
+			if (playing !== "show" || !show) {
+				return
+			}
+
+			const showKey = show.source?.url ?? show.name
+			if (lastScrobbledShow.current === showKey) {
+				return
+			}
+
+			lastScrobbledShow.current = showKey
+			electron.send("lastfm-scrobbler-update", {
+				position,
+				tracklist: show.tracklist,
+				showName: show.name,
+			})
+		},
+		[playing, show, position],
+	)
+
+	// Send position updates to scrobbler during show playback
+	useEffect(
+		function () {
+			if (playing !== "show" || !show) {
+				return
+			}
+
+			electron.send("lastfm-scrobbler-position", position)
+		},
+		[playing, show, position],
+	)
+
+	// Notify scrobbler when show playback stops
+	useEffect(
+		function () {
+			if (playing !== "show") {
+				lastScrobbledShow.current = null
+				electron.send("lastfm-scrobbler-stop")
+			}
+		},
+		[playing],
+	)
+
 	const handleShowTracklist = useCallback(function () {
 		const all = document.querySelectorAll("[data-show]")
 		for (const el of all) {
@@ -231,6 +279,16 @@ export function NTS() {
 			stop("show")
 		},
 		[stop],
+	)
+
+	// Let the main process decide whether to autoplay the next Up Next episode
+	const showPath = show?.path ?? null
+	const handleShowEnded = useCallback(
+		function () {
+			stop("show")
+			electron.send("show-ended", showPath)
+		},
+		[stop, showPath],
 	)
 
 	const handleShowLoad = useCallback(function (dur: number) {
@@ -335,6 +393,7 @@ export function NTS() {
 					playing={playing === "show"}
 					onPlay={handleShowPlay}
 					onStop={handleShowStop}
+					onEnded={handleShowEnded}
 					onLoad={handleShowLoad}
 					onProgress={handleShowProgress}
 					position={position}
@@ -348,6 +407,7 @@ export function NTS() {
 					playing={playing === "show"}
 					onPlay={handleShowPlay}
 					onStop={handleShowStop}
+					onEnded={handleShowEnded}
 					onLoad={handleShowLoad}
 					onProgress={handleShowProgress}
 					position={position}

@@ -3,7 +3,7 @@ appId: "com.dzndani.dznts"
 
 directories:
   app: dist
-  output: bundle
+  output: bundle_upnext
 
 win:
   icon: app/icon.ico

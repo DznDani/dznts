@@ -5,7 +5,7 @@
 	"type": "module",
 	"main": "index.cjs",
 	"scripts": {
-		"dev": "make dev",
+		"dev": "node scripts/dev.mjs",
 		"typecheck": "tsc --noEmit",
 		"format": "biome check . --linter-enabled=false --organize-imports-enabled=true --fix",
 		"format:check": "biome check . --linter-enabled=false --organize-imports-enabled=true",

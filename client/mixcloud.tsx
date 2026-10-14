@@ -8,6 +8,7 @@ type Props = {
 	playing: boolean
 	onStop: () => void
 	onPlay: () => void
+	onEnded: () => void
 	onProgress: (pos: number) => void
 	onLoad: (dur: number) => void
 	position: number
@@ -20,6 +21,7 @@ export function Mixcloud(props: Props) {
 		playing,
 		onStop,
 		onPlay,
+		onEnded,
 		onProgress,
 		onLoad,
 		position,
@@ -41,14 +43,14 @@ export function Mixcloud(props: Props) {
 				.then(function () {
 					w.events.play.on(onPlay)
 					w.events.pause.on(onStop)
-					w.events.ended.on(onStop)
+					w.events.ended.on(onEnded)
 					w.events.progress.on(onProgress)
 					w.getDuration().then((duration) => onLoad(duration))
 					setWidget(w)
 				})
 				.catch((err) => console.error(err))
 		},
-		[show, onLoad, onPlay, onStop, onProgress],
+		[show, onLoad, onPlay, onStop, onEnded, onProgress],
 	)
 
 	useEffect(

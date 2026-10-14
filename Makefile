@@ -73,7 +73,7 @@ index: # Build the "server"-side js
 index: app/main.ts
 	@$(log) "Building app js..."
 	@mkdir -p dist
-	@env NODE_ENV=development $(bin)/esbuild --bundle --format=cjs --platform=node --external:electron --loader:.png=file app/main.ts --outfile=dist/index.cjs --define:FIREBASE_CONFIG='$(shell $(bin)/dotenv -p FIREBASE_CONFIG)'
+	@env NODE_ENV=development $(bin)/esbuild --bundle --format=cjs --platform=node --external:electron --loader:.png=file app/main.ts --outfile=dist/index.cjs --define:FIREBASE_CONFIG='$(shell $(bin)/dotenv -p FIREBASE_CONFIG)' --define:LASTFM_API_KEY='"$(shell $(bin)/dotenv -p LASTFM_API_KEY)"' --define:LASTFM_SHARED_SECRET='"$(shell $(bin)/dotenv -p LASTFM_SHARED_SECRET)"'
 
 preload: # Build the preload script
 preload: dist/preload.js
