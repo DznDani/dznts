@@ -31,6 +31,7 @@ export function Help(props: Props) {
 				tracklist.
 			</p>
 			<p>Click a track in the tracklist to copy the information to the clipboard.</p>
+			<p>Click the gear icon to open Settings.</p>
 		</div>
 	)
 }

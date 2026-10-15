@@ -13,6 +13,7 @@ import { useKeydown } from "./lib/use-keydown"
 import { useOffline } from "./lib/use-offline"
 
 import { useMetadata } from "./metadata"
+import { useDiscordPresence } from "./lib/use-discord-presence"
 
 import type { ShowInfo } from "../app/show"
 import { ArchiveURLPrompt } from "./archive-url-prompt"
@@ -26,6 +27,7 @@ import { Notifications, notify } from "./notifications"
 import { Offline } from "./offline"
 import { Player } from "./player"
 import { Show } from "./show"
+import { Settings, SettingsButton } from "./settings"
 import { Slide, Slider } from "./slider"
 import { Soundcloud } from "./soundcloud"
 import { Splash } from "./splash"
@@ -56,14 +58,19 @@ export function App() {
 
 	return (
 		<Fragment>
-			<NTS />
+			<NTS onRequestLogin={() => setRoute("login")} />
 			<Login onClose={handleLoginClose} show={route === "login"} />
 			<Notifications />
 		</Fragment>
 	)
 }
 
-export function NTS() {
+type NTSProps = {
+	onRequestLogin: () => void
+}
+
+export function NTS(props: NTSProps) {
+	const { onRequestLogin } = props
 	const [show, setShow] = useState<ShowInfo | null>(null)
 	const { preferences, updatePreferences } = usePreferences()
 
@@ -72,12 +79,14 @@ export function NTS() {
 	const [isOpen, setIsOpen] = useState(document.hasFocus())
 	const [isShowingHelp, setIsShowingHelp] = useState(false)
 	const [isArchiveURLPromptOpen, setIsArchiveURLPromptOpen] = useState(false)
+	const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 	const [duration, setDuration] = useState(0)
 	const [position, setPosition] = useState(0)
 	const [looped, setLooped] = useState(0)
 	const isOffline = useOffline()
 	const live = useLiveInfo({ skip: isOffline })
 	useMetadata(playing, show, live)
+	useDiscordPresence(playing, show, live, preferences.discordRPC)
 
 	const setVolume = useCallback(
 		function (fn: (volume: number) => number) {
@@ -90,23 +99,35 @@ export function NTS() {
 	const tracks2 = useLiveTracks(2)
 	const currentTracks = playing === 1 ? tracks1 : tracks2
 
-	const next = useCallback(function () {
-		setIndex((idx) => (idx + 1) % 3)
-	}, [])
+	const next = useCallback(
+		function () {
+			if (isSettingsOpen || isArchiveURLPromptOpen) {
+				return
+			}
+			setIndex((idx) => (idx + 1) % 3)
+		},
+		[isArchiveURLPromptOpen, isSettingsOpen],
+	)
 
-	const prev = useCallback(function () {
-		setIndex((idx) => (3 + idx - 1) % 3)
-	}, [])
+	const prev = useCallback(
+		function () {
+			if (isSettingsOpen || isArchiveURLPromptOpen) {
+				return
+			}
+			setIndex((idx) => (3 + idx - 1) % 3)
+		},
+		[isArchiveURLPromptOpen, isSettingsOpen],
+	)
 
 	const togglePlaying = useCallback(
 		function () {
-			if (isOffline) {
+			if (isOffline || isSettingsOpen || isArchiveURLPromptOpen) {
 				return
 			}
 
 			setPlaying((playing) => (playing ? null : indexToChannel[index]))
 		},
-		[index, isOffline],
+		[index, isArchiveURLPromptOpen, isOffline, isSettingsOpen],
 	)
 
 	const stop = useCallback(function (channel: Channel) {
@@ -129,6 +150,11 @@ export function NTS() {
 
 	const close = useCallback(
 		function () {
+			if (isSettingsOpen) {
+				setIsSettingsOpen(false)
+				return
+			}
+
 			if (isArchiveURLPromptOpen) {
 				setIsArchiveURLPromptOpen(false)
 				return
@@ -136,7 +162,7 @@ export function NTS() {
 
 			electron.send("close")
 		},
-		[isArchiveURLPromptOpen],
+		[isArchiveURLPromptOpen, isSettingsOpen],
 	)
 
 	useEffect(
@@ -160,15 +186,52 @@ export function NTS() {
 		[setVolume],
 	)
 
+	const isOverlayOpen = isSettingsOpen || isArchiveURLPromptOpen
 	useKeydown("ArrowRight", next)
 	useKeydown("ArrowLeft", prev)
-	useKeydown("?", () => setIsShowingHelp((x) => !x))
-	useKeydown(" ", togglePlaying, [playing, index])
+	useKeydown("?", () => {
+		if (!isOverlayOpen) {
+			setIsShowingHelp((x) => !x)
+		}
+	}, [isOverlayOpen])
+	useKeydown(" ", togglePlaying, [playing, index, togglePlaying])
 	useKeydown("Escape", close)
-	useKeydown("t", () => electron.send("tracklist", indexToChannel[index]), [index])
-	useKeydown("c", () => electron.send("chat", indexToChannel[index]), [index])
-	useKeydown("1", () => setPlaying(playing === 1 ? null : 1), [playing])
-	useKeydown("2", () => setPlaying(playing === 2 ? null : 2), [playing])
+	useKeydown(
+		"t",
+		() => {
+			if (!isOverlayOpen) {
+				electron.send("tracklist", indexToChannel[index])
+			}
+		},
+		[index, isOverlayOpen],
+	)
+	useKeydown(
+		"c",
+		() => {
+			if (!isOverlayOpen) {
+				electron.send("chat", indexToChannel[index])
+			}
+		},
+		[index, isOverlayOpen],
+	)
+	useKeydown(
+		"1",
+		() => {
+			if (!isOverlayOpen) {
+				setPlaying(playing === 1 ? null : 1)
+			}
+		},
+		[playing, isOverlayOpen],
+	)
+	useKeydown(
+		"2",
+		() => {
+			if (!isOverlayOpen) {
+				setPlaying(playing === 2 ? null : 2)
+			}
+		},
+		[playing, isOverlayOpen],
+	)
 	useKeydown("+", increaseVolume)
 	useKeydown("-", decreaseVolume)
 	useKeydown("ArrowUp", increaseVolume)
@@ -191,6 +254,7 @@ export function NTS() {
 		function () {
 			setIsOpen(false)
 			setIsArchiveURLPromptOpen(false)
+			setIsSettingsOpen(false)
 
 			if (!playing) {
 				return
@@ -322,6 +386,31 @@ export function NTS() {
 		[handleOpenArchiveURL],
 	)
 
+	const handleResumeShow = useCallback(async function (url: string) {
+		try {
+			await electron.invoke("open-show-url", url)
+			setIsSettingsOpen(false)
+		} catch (err) {
+			const message =
+				err instanceof Error ? err.message : "Could not open this NTS show URL"
+			notify({ message, type: "error" })
+		}
+	}, [])
+
+	const handleShowBack = useCallback(
+		function () {
+			if (playing === "show") {
+				stop("show")
+			}
+			setShow(null)
+			setPosition(0)
+			setDuration(0)
+			setLooped(0)
+			electron.send("show-closed")
+		},
+		[playing, stop],
+	)
+
 	return (
 		<Fragment>
 			<Splash hide={!live.loading} />
@@ -356,6 +445,7 @@ export function NTS() {
 						duration={duration}
 						position={position}
 						onOpenArchiveURL={handleOpenArchiveURL}
+						onBack={handleShowBack}
 					/>
 				</Slide>
 			</Slider>
@@ -372,6 +462,11 @@ export function NTS() {
 				hasTracks={currentTracks.length > 0}
 			/>
 			<Chat channel={indexToChannel[index]} />
+			<SettingsButton
+				channel={indexToChannel[index]}
+				hasShow={Boolean(show)}
+				onClick={() => setIsSettingsOpen(true)}
+			/>
 			<Player
 				src={streams[1]}
 				playing={playing === 1}
@@ -420,6 +515,12 @@ export function NTS() {
 				show={isArchiveURLPromptOpen}
 				onClose={() => setIsArchiveURLPromptOpen(false)}
 				onSubmit={handleArchiveURLSubmit}
+			/>
+			<Settings
+				show={isSettingsOpen}
+				onClose={() => setIsSettingsOpen(false)}
+				onRequestLogin={onRequestLogin}
+				onResumeShow={handleResumeShow}
 			/>
 			<Volume volume={preferences.volume} />
 		</Fragment>

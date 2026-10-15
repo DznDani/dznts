@@ -18,6 +18,7 @@ type Props = {
 	duration: number
 	position: number
 	onOpenArchiveURL: () => Promise<void>
+	onBack?: () => void
 }
 
 export function Show(props: Props) {
@@ -30,6 +31,7 @@ export function Show(props: Props) {
 		duration,
 		position,
 		onOpenArchiveURL,
+		onBack,
 	} = props
 
 	const handleMyNTSClick = useCallback(function () {
@@ -78,11 +80,20 @@ export function Show(props: Props) {
 			<div className={css.top}>
 				<img src={image} className={css.image} draggable={false} />
 				<div className={css.header}>
-					<div className={css.date}>{formatDate(date)}</div>
+					<button
+						type="button"
+						className={css.back}
+						onClick={onBack}
+						aria-label="Back to archive menu"
+					>
+						Back
+					</button>
 				</div>
 				<div className={css.footer}>
-					<div className={css.location}>{location}</div>
-					<br />
+					<div className={css.meta}>
+						<div className={css.date}>{formatDate(date)}</div>
+						{Boolean(location) && <div className={css.location}>{location}</div>}
+					</div>
 					<span className={css.name}>{name}</span>
 				</div>
 			</div>

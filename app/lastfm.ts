@@ -10,6 +10,15 @@ const API_ROOT = "https://ws.audioscrobbler.com/2.0/"
 
 type LastFmResponse = Record<string, unknown>
 
+export class LastFmError extends Error {
+	code: number
+
+	constructor(message: string, code: number) {
+		super(message)
+		this.code = code
+	}
+}
+
 function generateApiSig(params: Record<string, string>): string {
 	const keys = Object.keys(params).sort()
 	let sigString = ""
@@ -72,7 +81,10 @@ export async function getSession(
 	})
 
 	if (result.error) {
-		throw new Error(`Last.fm auth.getSession failed: ${result.message}`)
+		throw new LastFmError(
+			`Last.fm auth.getSession failed: ${result.message}`,
+			Number(result.error),
+		)
 	}
 
 	const session = result.session as { key: string; name: string }

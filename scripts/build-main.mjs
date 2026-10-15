@@ -27,6 +27,7 @@ async function main() {
 	const firebaseConfig = readEnvVar("FIREBASE_CONFIG")
 	const lastfmApiKey = readEnvVar("LASTFM_API_KEY")
 	const lastfmSharedSecret = readEnvVar("LASTFM_SHARED_SECRET")
+	const discordClientId = readEnvVar("DISCORD_CLIENT_ID")
 	await mkdir("dist", { recursive: true })
 
 	await build({
@@ -45,6 +46,7 @@ async function main() {
 			FIREBASE_CONFIG: JSON.stringify(firebaseConfig),
 			LASTFM_API_KEY: JSON.stringify(lastfmApiKey),
 			LASTFM_SHARED_SECRET: JSON.stringify(lastfmSharedSecret),
+			DISCORD_CLIENT_ID: JSON.stringify(discordClientId),
 		},
 	})
 }

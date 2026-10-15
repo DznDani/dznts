@@ -30,9 +30,13 @@ export async function add(entry: Entry) {
 		const idx = history.findIndex((entry) => entry.url === value.url)
 		return idx === index
 	})
-	write(deduped)
+	await write(deduped)
 }
 
 export async function clear(): Promise<void> {
-	await fs.unlink(filename)
+	try {
+		await fs.unlink(filename)
+	} catch (err) {
+		// ignore if file doesn't exist
+	}
 }

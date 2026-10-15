@@ -70,14 +70,24 @@
 	-webkit-box-decoration-break: clone;
 }
 
+.meta {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-bottom: 0.5rem;
+}
+
+.date,
 .location {
 	background: black;
+	color: white;
 	font-size: 0.8rem;
 	font-weight: bold;
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
 	text-transform: uppercase;
-	padding: 0.1rem 0.3rem 0.05rem 0.3rem;
-	margin-bottom: 0.5rem;
+	padding: 0.15rem 0.35rem;
+	line-height: 1.2;
 }
 
 .location:empty {
@@ -89,12 +99,33 @@
 	top: 0.5rem;
 	left: 0.5rem;
 	display: flex;
+	align-items: center;
+	z-index: 20;
 }
 
-.date {
-	padding: 0.25rem 0.5rem;
+.back {
 	background: black;
 	color: white;
+	border: none;
+	font: inherit;
+	font-size: 0.85rem;
+	font-weight: bold;
+	text-transform: uppercase;
+	padding: 0.25rem 0.5rem;
+	cursor: pointer;
+	outline: none;
+	display: inline-flex;
+	align-items: center;
+	opacity: 0.5;
+	transition: opacity 300ms ease;
+}
+
+.back:hover {
+	opacity: 1;
+}
+
+.back:focus-visible {
+	outline: 1px solid white;
 }
 
 .notracklist {

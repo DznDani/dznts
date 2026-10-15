@@ -19,3 +19,26 @@ electron.once("preferences", function render(_: Event, preferences: Preferences)
 	createRoot(root).render(app)
 })
 electron.send("init")
+
+// Prevent Chromium zoom keyboard shortcuts and mouse wheel zoom
+window.addEventListener(
+	"wheel",
+	(event) => {
+		if (event.ctrlKey) {
+			event.preventDefault()
+		}
+	},
+	{ passive: false },
+)
+
+window.addEventListener("keydown", (event) => {
+	if (
+		event.ctrlKey &&
+		(event.key === "=" ||
+			event.key === "-" ||
+			event.key === "+" ||
+			event.key === "0")
+	) {
+		event.preventDefault()
+	}
+})

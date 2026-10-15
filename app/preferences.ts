@@ -5,11 +5,13 @@ import { app } from "electron"
 export type Preferences = {
 	volume: number
 	autoplay: boolean
+	discordRPC: boolean
 }
 
 const defaults: Preferences = {
 	volume: 0.8,
 	autoplay: true,
+	discordRPC: true,
 }
 
 const filename = path.join(app.getPath("userData"), "preferences.json")

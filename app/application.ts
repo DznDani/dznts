@@ -25,7 +25,9 @@ import { NTSLastFmScrobbler } from "./lastfm-scrobbler"
 import * as lastfmSession from "./lastfm-session"
 import { NTSLiveTracks } from "./live-tracks"
 import * as preferences from "./preferences"
+import { DiscordRPCService, type DiscordPresencePayload } from "./discord-rpc"
 import { type ShowInfo, type Track, show } from "./show"
+import type { ExternalTarget, LastFmStatus, SettingsSnapshot } from "./settings-state"
 import { UpNextQueue, type UpNextEpisode, episodePathFromURL } from "./up-next"
 
 import trayDarkCh1 from "../logos/dznts-tray-dark-ch1.ico"
@@ -74,7 +76,9 @@ export class NTSApplication {
 	liveTracks: NTSLiveTracks
 	trayState: TrayState
 	scrobbler: NTSLastFmScrobbler
+	discordRPC: DiscordRPCService
 	lastfmToken: string | null = null
+	private lastfmPoll: NodeJS.Timeout | null = null
 	upNext: UpNextQueue = new UpNextQueue()
 
 	constructor(production: boolean) {
@@ -85,6 +89,10 @@ export class NTSApplication {
 		this.production = production
 		this.liveTracks = new NTSLiveTracks(this.window.webContents)
 		this.scrobbler = new NTSLastFmScrobbler()
+
+		// @ts-expect-error injected by esbuild define
+		const discordClientId = typeof DISCORD_CLIENT_ID !== "undefined" ? DISCORD_CLIENT_ID : ""
+		this.discordRPC = new DiscordRPCService(discordClientId)
 	}
 
 	async init() {
@@ -126,6 +134,9 @@ export class NTSApplication {
 		ipcMain.on("show-ended", (_evt: IpcMainEvent, episodePath: string | null) => {
 			void this.handleShowEnded(episodePath)
 		})
+		ipcMain.on("show-closed", () => {
+			this.upNext.setCurrent(null, false)
+		})
 
 		// Last.fm IPC handlers
 		ipcMain.on(
@@ -145,17 +156,103 @@ export class NTSApplication {
 			this.scrobbler.reset()
 		})
 
+		// Discord Rich Presence IPC handlers
+		ipcMain.on(
+			"discord:update-presence",
+			(_evt: IpcMainEvent, payload: DiscordPresencePayload) => {
+				void this.discordRPC.updatePresence(payload)
+			},
+		)
+		ipcMain.on("discord:clear-presence", () => {
+			void this.discordRPC.clearPresence()
+		})
+
+		this.upNext.onChange = () =>
+			this.push("upnext:changed", this.upNext.snapshot())
+		this.registerSettingsIPC()
+
 		if (process.platform === "darwin") {
 			app.on("activate", () => this.open())
 			setTimeout(() => app.dock.hide(), 1500)
 		}
 
-		app.on("will-quit", () => globalShortcut.unregisterAll())
+		app.on("will-quit", () => {
+			globalShortcut.unregisterAll()
+			void this.discordRPC.destroy()
+		})
 
 		globalShortcut.register("Control+N", () => this.toggle())
 		await this.liveTracks.init()
 		await this.scrobbler.init()
+		const initialPrefs = await preferences.read()
+		this.discordRPC.setEnabled(initialPrefs.discordRPC)
 		await this.loadClient()
+	}
+
+	private push(channel: string, payload: unknown) {
+		if (!this.window.isDestroyed()) {
+			this.window.webContents.send(channel, payload)
+		}
+	}
+
+	// --- Settings ---
+
+	private registerSettingsIPC() {
+		ipcMain.handle("settings:snapshot", () => this.getSettingsSnapshot())
+		ipcMain.handle("lastfm:connect", () => this.lastfmConnect())
+		ipcMain.handle("lastfm:cancel", () => this.lastfmCancel())
+		ipcMain.handle("lastfm:disconnect", () => this.lastfmDisconnect())
+		ipcMain.handle("credentials:logout", () => this.ntsLogout())
+		ipcMain.handle("history:clear", async () => {
+			await history.clear()
+			this.push("history:changed", [])
+		})
+		ipcMain.handle("upnext:play-next", () => this.playNext({ auto: false }))
+		ipcMain.handle("upnext:play", (_evt: IpcMainInvokeEvent, path: string) =>
+			this.playUpNext(path),
+		)
+		ipcMain.handle("upnext:remove", (_evt: IpcMainInvokeEvent, path: string) => {
+			this.upNext.remove(path)
+		})
+		ipcMain.on("external:open", (_evt: IpcMainEvent, target: ExternalTarget) => {
+			if (target === "schedule") {
+				this.openSchedule()
+			} else if (target === "favourites") {
+				this.openMyNTS()
+			} else if (target === "about") {
+				this.openAbout()
+			}
+		})
+	}
+
+	async getSettingsSnapshot(): Promise<SettingsSnapshot> {
+		return {
+			version: app.getVersion(),
+			lastfm: await this.getLastfmStatus(),
+			ntsLoggedIn: await credentials.has(),
+			history: await history.read(),
+			upNext: this.upNext.snapshot(),
+		}
+	}
+
+	async getLastfmStatus(): Promise<LastFmStatus> {
+		if (!lastfm.isConfigured()) {
+			return { state: "unavailable" }
+		}
+		const session = await lastfmSession.read()
+		if (session) {
+			return { state: "connected", username: session.username }
+		}
+		return this.lastfmToken ? { state: "pending" } : { state: "disconnected" }
+	}
+
+	async pushLastfmStatus() {
+		this.push("lastfm:status", await this.getLastfmStatus())
+	}
+
+	async ntsLogout() {
+		await this.liveTracks.logout()
+		this.push("credentials:status", false)
 	}
 
 	showFromSecondInstance() {
@@ -272,7 +369,8 @@ export class NTSApplication {
 		try {
 			const data = await show(cleanURL)
 			const path = episodePathFromURL(cleanURL)
-			history.add({ name: data.name, url: cleanURL })
+			await history.add({ name: data.name, url: cleanURL })
+			this.push("history:changed", await history.read())
 			this.upNext.setCurrent(path, Boolean(options.fromQueue))
 			this.window.webContents.send("open-show", { ...data, path })
 			return { ok: true }
@@ -384,27 +482,88 @@ export class NTSApplication {
 
 	async storePreferences(prefs: Partial<preferences.Preferences>) {
 		const old = await preferences.read()
-		await preferences.write({
+		const merged = {
 			...old,
 			...prefs,
-		})
+		}
+		if (prefs.discordRPC !== undefined) {
+			this.discordRPC.setEnabled(prefs.discordRPC)
+		}
+		await preferences.write(merged)
 	}
 
 	// --- Last.fm ---
 
 	async lastfmConnect() {
+		this.stopLastfmPolling()
 		try {
 			const token = await lastfm.getToken()
 			this.lastfmToken = token
-			const authUrl = lastfm.getAuthUrl(token)
-			shell.openExternal(authUrl)
-			this.showNotification(
-				"Authorize dzNTS in your browser, then right-click the tray and select 'Complete Last.fm Connection'",
-			)
+			shell.openExternal(lastfm.getAuthUrl(token))
+			this.startLastfmPolling(token)
+			await this.pushLastfmStatus()
 		} catch (err) {
 			console.warn("Last.fm connect failed:", err)
 			this.showNotification("Could not connect to Last.fm")
 		}
+	}
+
+	/**
+	 * Polls auth.getSession only while a connection is pending (every 4s, up to
+	 * 3 minutes). Outside of that there are no timers.
+	 */
+	private startLastfmPolling(token: string) {
+		const deadline = Date.now() + 3 * 60_000
+		let inFlight = false
+		this.lastfmPoll = setInterval(async () => {
+			if (inFlight) {
+				return
+			}
+			if (this.lastfmToken !== token || Date.now() > deadline) {
+				this.stopLastfmPolling()
+				if (this.lastfmToken === token) {
+					this.lastfmToken = null
+				}
+				void this.pushLastfmStatus()
+				return
+			}
+			inFlight = true
+			try {
+				const session = await lastfm.getSession(token)
+				if (this.lastfmToken === token) {
+					await this.finishLastfmSession(session)
+				}
+			} catch (err) {
+				// 14 = token not authorized yet; network errors are retried
+				if (err instanceof lastfm.LastFmError && err.code !== 14) {
+					this.stopLastfmPolling()
+					this.lastfmToken = null
+					this.showNotification("Last.fm authorization failed")
+					void this.pushLastfmStatus()
+				}
+			} finally {
+				inFlight = false
+			}
+		}, 4000)
+	}
+
+	private stopLastfmPolling() {
+		if (this.lastfmPoll) {
+			clearInterval(this.lastfmPoll)
+			this.lastfmPoll = null
+		}
+	}
+
+	private async finishLastfmSession(session: {
+		sessionKey: string
+		username: string
+	}) {
+		this.stopLastfmPolling()
+		await lastfmSession.write(session)
+		this.scrobbler.setSession(session.sessionKey)
+		this.lastfmToken = null
+		this.showNotification(`Last.fm connected as ${session.username}`)
+		await this.pushLastfmStatus()
 	}
 
 	async lastfmConfirm() {
@@ -417,10 +576,7 @@ export class NTSApplication {
 
 		try {
 			const session = await lastfm.getSession(this.lastfmToken)
-			await lastfmSession.write(session)
-			this.scrobbler.setSession(session.sessionKey)
-			this.lastfmToken = null
-			this.showNotification(`Last.fm connected as ${session.username}`)
+			await this.finishLastfmSession(session)
 		} catch (err) {
 			console.warn("Last.fm confirm failed:", err)
 			this.showNotification(
@@ -429,10 +585,18 @@ export class NTSApplication {
 		}
 	}
 
+	async lastfmCancel() {
+		this.stopLastfmPolling()
+		this.lastfmToken = null
+		await this.pushLastfmStatus()
+	}
+
 	async lastfmDisconnect() {
+		this.stopLastfmPolling()
 		await lastfmSession.clear()
 		this.scrobbler.clearSession()
 		this.lastfmToken = null
+		await this.pushLastfmStatus()
 	}
 }
 
@@ -461,6 +625,24 @@ function makeWindow(): BrowserWindow {
 		window.setVisibleOnAllWorkspaces(true)
 	}
 	window.fullScreenable = false
+
+	window.webContents.setVisualZoomLevelLimits(1, 1)
+	window.webContents.on("zoom-changed", (event) => {
+		event.preventDefault()
+	})
+	window.webContents.on("before-input-event", (event, input) => {
+		if (
+			input.control &&
+			(input.key === "=" ||
+				input.key === "-" ||
+				input.key === "+" ||
+				input.key === "0" ||
+				input.key === "numsub" ||
+				input.key === "numadd")
+		) {
+			event.preventDefault()
+		}
+	})
 
 	return window
 }

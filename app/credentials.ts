@@ -30,7 +30,11 @@ export async function write(credentials: Credentials): Promise<void> {
 }
 
 export async function clear(): Promise<void> {
-	await fs.unlink(filename)
+	try {
+		await fs.unlink(filename)
+	} catch (err) {
+		// ignore if file doesn't exist
+	}
 }
 
 export async function has() {

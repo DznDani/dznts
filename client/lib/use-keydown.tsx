@@ -8,7 +8,13 @@ export function useKeydown(key: string, handler: () => void, deps: any[] = []) {
 				return
 			}
 
-			if (evt.target !== document.body) {
+			const target = evt.target as HTMLElement | null
+			const isInput =
+				target instanceof HTMLInputElement ||
+				target instanceof HTMLTextAreaElement ||
+				Boolean(target?.isContentEditable)
+
+			if (isInput) {
 				return
 			}
 
