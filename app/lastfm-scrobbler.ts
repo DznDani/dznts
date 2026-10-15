@@ -15,6 +15,8 @@ type ScrobbleTrack = {
 }
 
 export class NTSLastFmScrobbler {
+	private static readonly MAX_TRACK_CACHE = 200
+
 	private tracklist: ScrobbleTrack[] = []
 	private showName: string | null = null
 	private activeTrackIndex: number | null = null
@@ -84,6 +86,9 @@ export class NTSLastFmScrobbler {
 
 		// Track changed — send Now Playing
 		if (trackIndex !== this.activeTrackIndex) {
+			if (this.activeTrackIndex !== null) {
+				this.trackListenStart.delete(this.activeTrackIndex)
+			}
 			this.activeTrackIndex = trackIndex
 			this.trackListenStart.set(trackIndex, Date.now())
 			await this.sendNowPlaying(trackIndex)
@@ -155,9 +160,20 @@ export class NTSLastFmScrobbler {
 		const scrobblePoint = Math.min(track.duration / 2, MAX_SCROBBLE_POINT)
 
 		if (listenedSeconds >= scrobblePoint) {
-			this.scrobbled.add(index)
+			this.markScrobbled(index)
 			await this.sendScrobble(index)
 		}
+	}
+
+	private markScrobbled(trackIndex: number) {
+		if (this.scrobbled.size >= NTSLastFmScrobbler.MAX_TRACK_CACHE) {
+			const oldestKey = this.scrobbled.values().next().value
+			if (oldestKey !== undefined) {
+				this.scrobbled.delete(oldestKey)
+			}
+		}
+		this.scrobbled.add(trackIndex)
+		this.trackListenStart.delete(trackIndex)
 	}
 
 	private async sendScrobble(index: number) {
