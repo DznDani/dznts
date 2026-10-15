@@ -80,11 +80,12 @@ export class NTSApplication {
 	lastfmToken: string | null = null
 	private lastfmPoll: NodeJS.Timeout | null = null
 	upNext: UpNextQueue = new UpNextQueue()
+	private trayIconCache = new Map<string, NativeImage>()
 
 	constructor(production: boolean) {
 		this.window = makeWindow()
 		this.trayState = "idle"
-		this.tray = makeTray(getTrayIconPath(this.trayState))
+		this.tray = makeTray(this.getCachedTrayImage(getTrayIconPath(this.trayState)))
 		this.evts = new EventEmitter()
 		this.production = production
 		this.liveTracks = new NTSLiveTracks(this.window.webContents)
@@ -179,6 +180,7 @@ export class NTSApplication {
 		app.on("will-quit", () => {
 			globalShortcut.unregisterAll()
 			void this.discordRPC.destroy()
+			this.trayIconCache.clear()
 		})
 
 		globalShortcut.register("Control+N", () => this.toggle())
@@ -310,8 +312,17 @@ export class NTSApplication {
 		this.updateTrayIcon()
 	}
 
+	private getCachedTrayImage(iconPath: string): NativeImage {
+		let image = this.trayIconCache.get(iconPath)
+		if (!image) {
+			image = makeIcon(iconPath)
+			this.trayIconCache.set(iconPath, image)
+		}
+		return image
+	}
+
 	updateTrayIcon() {
-		const icon = makeIcon(getTrayIconPath(this.trayState))
+		const icon = this.getCachedTrayImage(getTrayIconPath(this.trayState))
 		this.tray.setImage(icon)
 	}
 
@@ -667,8 +678,7 @@ function makeIcon(filename: string): NativeImage {
 	return icon
 }
 
-function makeTray(iconPath: string): Tray {
-	const icon = makeIcon(iconPath)
+function makeTray(icon: NativeImage): Tray {
 	const tray = new Tray(icon)
 	if (process.platform === "darwin") {
 		tray.setIgnoreDoubleClickEvents(true)
