@@ -1,4 +1,14 @@
+.container {
+	position: relative;
+	width: 100vw;
+	height: 100vh;
+	overflow: hidden;
+}
+
 .empty {
+	position: absolute;
+	top: 0;
+	left: 0;
 	width: 100vw;
 	height: 100vh;
 	display: flex;
@@ -7,6 +17,10 @@
 	text-align: center;
 	padding: 3em;
 	box-sizing: border-box;
+}
+
+.empty.inactive {
+	pointer-events: none;
 }
 
 .empty svg {
@@ -18,12 +32,24 @@
 }
 
 .show {
+	position: absolute;
+	top: 0;
+	left: 0;
 	overflow-y: auto;
 	overflow-x: hidden;
 	width: 100%;
 	height: 100vh;
 	-ms-overflow-style: none;
 	scrollbar-width: none;
+	background: black;
+	opacity: 1;
+	transition: opacity 200ms ease;
+	z-index: 1;
+}
+
+.show.exiting {
+	opacity: 0;
+	pointer-events: none;
 }
 
 .show::-webkit-scrollbar {

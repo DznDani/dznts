@@ -72,6 +72,8 @@ type NTSProps = {
 export function NTS(props: NTSProps) {
 	const { onRequestLogin } = props
 	const [show, setShow] = useState<ShowInfo | null>(null)
+	const [isExitingShow, setIsExitingShow] = useState(false)
+	const exitShowTimeoutRef = useRef<number | null>(null)
 	const { preferences, updatePreferences } = usePreferences()
 
 	const [index, setIndex] = useState<number>(0)
@@ -101,33 +103,33 @@ export function NTS(props: NTSProps) {
 
 	const next = useCallback(
 		function () {
-			if (isSettingsOpen || isArchiveURLPromptOpen) {
+			if (isSettingsOpen || isArchiveURLPromptOpen || isExitingShow) {
 				return
 			}
 			setIndex((idx) => (idx + 1) % 3)
 		},
-		[isArchiveURLPromptOpen, isSettingsOpen],
+		[isArchiveURLPromptOpen, isExitingShow, isSettingsOpen],
 	)
 
 	const prev = useCallback(
 		function () {
-			if (isSettingsOpen || isArchiveURLPromptOpen) {
+			if (isSettingsOpen || isArchiveURLPromptOpen || isExitingShow) {
 				return
 			}
 			setIndex((idx) => (3 + idx - 1) % 3)
 		},
-		[isArchiveURLPromptOpen, isSettingsOpen],
+		[isArchiveURLPromptOpen, isExitingShow, isSettingsOpen],
 	)
 
 	const togglePlaying = useCallback(
 		function () {
-			if (isOffline || isSettingsOpen || isArchiveURLPromptOpen) {
+			if (isOffline || isSettingsOpen || isArchiveURLPromptOpen || isExitingShow) {
 				return
 			}
 
 			setPlaying((playing) => (playing ? null : indexToChannel[index]))
 		},
-		[index, isArchiveURLPromptOpen, isOffline, isSettingsOpen],
+		[index, isArchiveURLPromptOpen, isExitingShow, isOffline, isSettingsOpen],
 	)
 
 	const stop = useCallback(function (channel: Channel) {
@@ -160,9 +162,13 @@ export function NTS(props: NTSProps) {
 				return
 			}
 
+			if (isExitingShow) {
+				return
+			}
+
 			electron.send("close")
 		},
-		[isArchiveURLPromptOpen, isSettingsOpen],
+		[isArchiveURLPromptOpen, isExitingShow, isSettingsOpen],
 	)
 
 	useEffect(
@@ -186,7 +192,8 @@ export function NTS(props: NTSProps) {
 		[setVolume],
 	)
 
-	const isOverlayOpen = isSettingsOpen || isArchiveURLPromptOpen
+	const isOverlayOpen =
+		isSettingsOpen || isArchiveURLPromptOpen || isExitingShow
 	useKeydown("ArrowRight", next)
 	useKeydown("ArrowLeft", prev)
 	useKeydown("?", () => {
@@ -238,6 +245,11 @@ export function NTS(props: NTSProps) {
 	useKeydown("ArrowDown", decreaseVolume)
 
 	useEvent("open-show", async function (show: ShowInfo) {
+		if (exitShowTimeoutRef.current) {
+			window.clearTimeout(exitShowTimeoutRef.current)
+			exitShowTimeoutRef.current = null
+		}
+		setIsExitingShow(false)
 		setShow(show)
 		setPlaying("show")
 		setIndex(channelToIndex.show)
@@ -399,17 +411,39 @@ export function NTS(props: NTSProps) {
 
 	const handleShowBack = useCallback(
 		function () {
+			if (isExitingShow) {
+				return
+			}
 			if (playing === "show") {
 				stop("show")
 			}
-			setShow(null)
-			setPosition(0)
-			setDuration(0)
-			setLooped(0)
 			electron.send("show-closed")
+			setIsExitingShow(true)
+
+			if (exitShowTimeoutRef.current) {
+				window.clearTimeout(exitShowTimeoutRef.current)
+			}
+			exitShowTimeoutRef.current = window.setTimeout(function () {
+				setShow(null)
+				setPosition(0)
+				setDuration(0)
+				setLooped(0)
+				setIsExitingShow(false)
+				exitShowTimeoutRef.current = null
+			}, 200)
 		},
-		[playing, stop],
+		[isExitingShow, playing, stop],
 	)
+
+	useEffect(function () {
+		return function () {
+			if (exitShowTimeoutRef.current) {
+				window.clearTimeout(exitShowTimeoutRef.current)
+			}
+		}
+	}, [])
+
+	const hasActiveShow = Boolean(show) && !isExitingShow
 
 	return (
 		<Fragment>
@@ -438,6 +472,7 @@ export function NTS(props: NTSProps) {
 				<Slide>
 					<Show
 						show={show}
+						isExiting={isExitingShow}
 						onPlay={() => setPlaying("show")}
 						onStop={stopAll}
 						onSeek={seek}
@@ -457,14 +492,14 @@ export function NTS(props: NTSProps) {
 			</button>
 			<Tracklist
 				channel={indexToChannel[index]}
-				hasShow={Boolean(show)}
+				hasShow={hasActiveShow}
 				onShowTracklist={handleShowTracklist}
 				hasTracks={currentTracks.length > 0}
 			/>
 			<Chat channel={indexToChannel[index]} />
 			<SettingsButton
 				channel={indexToChannel[index]}
-				hasShow={Boolean(show)}
+				hasShow={hasActiveShow}
 				onClick={() => setIsSettingsOpen(true)}
 			/>
 			<Player
