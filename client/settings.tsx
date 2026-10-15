@@ -21,11 +21,7 @@ export function SettingsButton(props: SettingsButtonProps) {
 	return (
 		<button
 			type="button"
-			className={classnames(
-				css.cog,
-				isCorner && css.corner,
-				isSingle && css.single,
-			)}
+			className={classnames(css.cog, isCorner && css.corner, isSingle && css.single)}
 			onClick={onClick}
 			aria-label="Settings"
 		>
@@ -71,12 +67,14 @@ export function Settings(props: SettingsProps) {
 	const { snapshot } = settings
 	const rootRef = useRef<HTMLDivElement>(null)
 	const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+	const [isUpNextOpen, setIsUpNextOpen] = useState(false)
 
 	useEffect(
 		function () {
 			if (!show) {
 				setIsHistoryOpen(false)
-					; (document.activeElement as HTMLElement)?.blur()
+				setIsUpNextOpen(false)
+				;(document.activeElement as HTMLElement)?.blur()
 				return
 			}
 			const timer = window.setTimeout(() => rootRef.current?.focus(), 0)
@@ -87,7 +85,7 @@ export function Settings(props: SettingsProps) {
 
 	const handleClose = useCallback(
 		function () {
-			; (document.activeElement as HTMLElement)?.blur()
+			;(document.activeElement as HTMLElement)?.blur()
 			onClose()
 		},
 		[onClose],
@@ -148,7 +146,7 @@ export function Settings(props: SettingsProps) {
 
 			<div className={css.body}>
 				<section className={css.section}>
-					<h2>Playback &amp; Up Next</h2>
+					<h2>Playback</h2>
 					<div className={css.row}>
 						<span>Autoplay Up Next</span>
 						<button
@@ -172,30 +170,56 @@ export function Settings(props: SettingsProps) {
 							Play
 						</button>
 					</div>
-					{snapshot && snapshot.upNext.queue.length === 0 && (
-						<p className={css.empty}>Nothing queued</p>
-					)}
-					{snapshot?.upNext.queue.map((ep) => (
-						<div className={css.row} key={ep.path}>
-							<button
-								type="button"
-								className={css.item}
-								title={ep.name}
-								onClick={() => settings.playUpNext(ep.path)}
-							>
-								<span>{ep.name}</span>
-								{ep.date && <small>{ep.date}</small>}
-							</button>
-							<button
-								type="button"
-								className={css.remove}
-								aria-label={`Remove ${ep.name}`}
-								onClick={() => settings.removeUpNext(ep.path)}
-							>
-								&times;
-							</button>
+				</section>
+
+				<section className={css.section}>
+					<button
+						type="button"
+						className={css.headerButton}
+						onClick={() => setIsUpNextOpen((open) => !open)}
+						aria-expanded={isUpNextOpen}
+					>
+						<h2>Up Next</h2>
+						<svg
+							viewBox="0 0 24 24"
+							className={classnames(css.chevron, isUpNextOpen && css.chevronOpen)}
+							aria-hidden="true"
+						>
+							<path d="m6 9 6 6 6-6" />
+						</svg>
+					</button>
+					{isUpNextOpen && (
+						<div className={css.collapsible}>
+							{snapshot && snapshot.upNext.queue.length === 0 && (
+								<p className={css.empty}>
+									{snapshot.upNext.current
+										? "Nothing queued"
+										: "Not available for live shows"}
+								</p>
+							)}
+							{snapshot?.upNext.queue.map((ep) => (
+								<div className={css.row} key={ep.path}>
+									<button
+										type="button"
+										className={css.item}
+										title={ep.name}
+										onClick={() => settings.playUpNext(ep.path)}
+									>
+										<span>{ep.name}</span>
+										{ep.date && <small>{ep.date}</small>}
+									</button>
+									<button
+										type="button"
+										className={css.remove}
+										aria-label={`Remove ${ep.name}`}
+										onClick={() => settings.removeUpNext(ep.path)}
+									>
+										&times;
+									</button>
+								</div>
+							))}
 						</div>
-					))}
+					)}
 				</section>
 
 				<section className={css.section}>
