@@ -12,38 +12,42 @@ export function Player(props: Props) {
 	const { src, playing, onStop, onPlay, volume = 1 } = props
 
 	const ref = useRef<HTMLAudioElement | null>(null)
+	const onPlayRef = useRef(onPlay)
+	const onStopRef = useRef(onStop)
 
-	useEffect(
-		function () {
-			const audio = ref.current
-			if (!audio) {
-				return
-			}
+	useEffect(() => {
+		onPlayRef.current = onPlay
+		onStopRef.current = onStop
+	})
 
-			function handlePlay() {
-				onPlay()
-			}
+	useEffect(function () {
+		const audio = ref.current
+		if (!audio) {
+			return
+		}
 
-			function handlePause() {
-				onStop()
-			}
+		function handlePlay() {
+			onPlayRef.current()
+		}
 
-			function handleEnded() {
-				onStop()
-			}
+		function handlePause() {
+			onStopRef.current()
+		}
 
-			audio.addEventListener("play", handlePlay)
-			audio.addEventListener("pause", handlePause)
-			audio.addEventListener("ended", handleEnded)
+		function handleEnded() {
+			onStopRef.current()
+		}
 
-			return () => {
-				audio.removeEventListener("play", handlePlay)
-				audio.removeEventListener("pause", handlePause)
-				audio.removeEventListener("ended", handleEnded)
-			}
-		},
-		[onPlay, onStop],
-	)
+		audio.addEventListener("play", handlePlay)
+		audio.addEventListener("pause", handlePause)
+		audio.addEventListener("ended", handleEnded)
+
+		return () => {
+			audio.removeEventListener("play", handlePlay)
+			audio.removeEventListener("pause", handlePause)
+			audio.removeEventListener("ended", handleEnded)
+		}
+	}, [])
 
 	useEffect(
 		function () {
@@ -56,16 +60,36 @@ export function Player(props: Props) {
 				if (!audio.paused) {
 					audio.pause()
 				}
+				audio.removeAttribute("src")
+				audio.load()
 				return
 			}
 
+			if (audio.getAttribute("src") !== src) {
+				audio.src = src
+			}
+
 			void audio.play().catch((err: unknown) => {
+				if (err instanceof DOMException && err.name === "AbortError") {
+					return
+				}
 				console.warn("Could not start live stream playback", { src, err })
-				onStop()
+				onStopRef.current()
 			})
 		},
-		[playing, onStop, src],
+		[playing, src],
 	)
+
+	useEffect(function () {
+		const audio = ref.current
+		return () => {
+			if (audio) {
+				audio.pause()
+				audio.removeAttribute("src")
+				audio.load()
+			}
+		}
+	}, [])
 
 	useEffect(
 		function () {
@@ -77,5 +101,5 @@ export function Player(props: Props) {
 		[volume],
 	)
 
-	return <audio src={src} ref={ref} />
+	return <audio ref={ref} preload="none" src={playing ? src : undefined} />
 }
