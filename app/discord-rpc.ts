@@ -1,5 +1,5 @@
-import { app } from "electron"
 import { Client } from "@xhayper/discord-rpc"
+import { app } from "electron"
 
 export type DiscordPresencePayload = {
 	details: string
@@ -28,6 +28,7 @@ export class DiscordRPCService {
 		const clean = clientId.trim()
 		if (this.clientId === clean) return
 		this.clientId = clean
+		this.clearReconnectTimer()
 		if (this.client) {
 			void this.destroy().then(() => {
 				if (this.clientId && this.isEnabled && this.lastPayload) {
@@ -41,10 +42,8 @@ export class DiscordRPCService {
 		if (this.isEnabled === enabled) return
 		this.isEnabled = enabled
 		if (!enabled) {
-			if (this.reconnectTimer) {
-				clearTimeout(this.reconnectTimer)
-				this.reconnectTimer = null
-			}
+			this.clearReconnectTimer()
+			void this.destroy()
 			void this.clearPresence()
 		} else if (this.lastPayload) {
 			void this.connectAndApply()
@@ -68,12 +67,20 @@ export class DiscordRPCService {
 
 	async clearPresence() {
 		this.lastPayload = null
+		this.clearReconnectTimer()
 		if (this.client?.isConnected && this.client.user) {
 			try {
 				await this.client.user.clearActivity()
 			} catch (err) {
 				console.warn("Discord RPC: Failed to clear activity:", err)
 			}
+		}
+	}
+
+	private clearReconnectTimer() {
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer)
+			this.reconnectTimer = null
 		}
 	}
 
@@ -93,6 +100,11 @@ export class DiscordRPCService {
 				await this.client?.login()
 			} catch (_err) {
 				// Discord desktop client might not be running locally; retry later
+				if (this.client) {
+					this.client.removeAllListeners()
+					await this.client.destroy().catch(() => {})
+					this.client = null
+				}
 				this.scheduleReconnect()
 				return
 			} finally {
@@ -105,19 +117,28 @@ export class DiscordRPCService {
 
 	private setupClient() {
 		if (!this.clientId) return
-		this.client = new Client({ clientId: this.clientId })
+		if (this.client) {
+			this.client.removeAllListeners()
+			void this.client.destroy().catch(() => {})
+			this.client = null
+		}
 
-		this.client.on("ready", () => {
-			if (this.reconnectTimer) {
-				clearTimeout(this.reconnectTimer)
-				this.reconnectTimer = null
-			}
-			if (this.lastPayload) {
+		const client = new Client({ clientId: this.clientId })
+		this.client = client
+
+		client.on("ready", () => {
+			this.clearReconnectTimer()
+			if (this.lastPayload && this.client === client) {
 				void this.applyActivity()
 			}
 		})
 
-		this.client.on("disconnected", () => {
+		client.on("disconnected", () => {
+			if (this.client === client) {
+				client.removeAllListeners()
+				void client.destroy().catch(() => {})
+				this.client = null
+			}
 			if (this.isEnabled && this.lastPayload) {
 				this.scheduleReconnect()
 			}
@@ -125,7 +146,12 @@ export class DiscordRPCService {
 	}
 
 	private scheduleReconnect() {
-		if (this.reconnectTimer || !this.isEnabled || !this.lastPayload || !this.clientId) {
+		if (
+			this.reconnectTimer ||
+			!this.isEnabled ||
+			!this.lastPayload ||
+			!this.clientId
+		) {
 			return
 		}
 		this.reconnectTimer = setTimeout(() => {
@@ -165,20 +191,22 @@ export class DiscordRPCService {
 	}
 
 	async destroy() {
-		if (this.reconnectTimer) {
-			clearTimeout(this.reconnectTimer)
-			this.reconnectTimer = null
-		}
+		this.clearReconnectTimer()
+		this.isConnecting = false
+
 		if (this.client) {
+			const client = this.client
+			this.client = null
+
 			try {
-				if (this.client.isConnected && this.client.user) {
-					await this.client.user.clearActivity()
+				if (client.isConnected && client.user) {
+					await client.user.clearActivity().catch(() => {})
 				}
-				await this.client.destroy()
+				client.removeAllListeners()
+				await client.destroy().catch(() => {})
 			} catch {
 				// Ignore errors on shutdown
 			}
-			this.client = null
 		}
 	}
 }
