@@ -13,7 +13,7 @@ export function useLiveTracks(stream: Stream) {
 		function (tracks: LiveTrack[]) {
 			setTracks(tracks)
 		},
-		[],
+		[stream],
 	)
 
 	return tracks
